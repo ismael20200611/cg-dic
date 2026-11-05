@@ -1,5 +1,5 @@
-window.RUDAW_DICTIONARIES = window.RUDAW_DICTIONARIES || {};
-window.RUDAW_DICTIONARIES.kurmanji = [
+window.TVMIDE_DICTIONARIES = window.TVMIDE_DICTIONARIES || {};
+window.TVMIDE_DICTIONARIES.kurmanji = [
     "Rûdaw",
     "Kurdistan",
     "Hewlêr",
