@@ -181,18 +181,16 @@ h2 {
     justify-content: center;
 }
 
-.camera-viewport-wrapper:fullscreen {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-    background: #000;
-}
-
+.camera-viewport-wrapper:fullscreen,
 .camera-viewport-wrapper:-webkit-full-screen {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-    background: #000;
+    width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    background: #000 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 99999 !important;
 }
 
 #camera-video {
@@ -225,19 +223,20 @@ h2 {
     bottom: 15px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(11, 15, 25, 0.85);
+    background: rgba(11, 15, 25, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(8px);
-    padding: 10px 16px;
-    border-radius: 30px;
+    padding: 12px 18px;
+    border-radius: 20px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.4s ease;
     z-index: 100;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    box-shadow: 0 4px 25px rgba(0,0,0,0.7);
+    max-width: 95%;
 }
 
 .camera-osd-menu.visible {
@@ -246,7 +245,7 @@ h2 {
 }
 
 .osd-title {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 700;
     color: var(--accent-gold);
     text-align: center;
@@ -256,15 +255,48 @@ h2 {
 .osd-controls-grid {
     display: flex;
     gap: 8px;
+    justify-content: center;
+}
+
+.osd-sliders-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 8px;
+    flex-wrap: wrap;
+}
+
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    gap: 2px;
+}
+
+.slider-group input[type="range"] {
+    width: 90px;
+    accent-color: var(--accent-gold);
+}
+
+.slider-group select {
+    padding: 2px 4px;
+    font-size: 0.7rem;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
 }
 
 .btn-osd {
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 6px 12px;
-    border-radius: 16px;
-    font-size: 0.75rem;
+    padding: 5px 10px;
+    border-radius: 14px;
+    font-size: 0.7rem;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s;
