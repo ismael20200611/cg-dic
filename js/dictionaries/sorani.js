@@ -1,6 +1,6 @@
-window.RUDAW_DICTIONARIES = window.RUDAW_DICTIONARIES || {};
-
-window.RUDAW_DICTIONARIES.sorani = [
+window.TVMIDE_DICTIONARIES = window.TVMIDE_DICTIONARIES || {};
+window.TVMIDE_DICTIONARIES.sorani = [
+    
     "رووداو",
     "دیجیتاڵ",
     "بەرپرسێکی",
