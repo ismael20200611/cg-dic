@@ -1,5 +1,5 @@
-window.RUDAW_DICTIONARIES = window.RUDAW_DICTIONARIES || {};
-window.RUDAW_DICTIONARIES.arabic = [
+window.TVMIDE_DICTIONARIES = window.TVMIDE_DICTIONARIES || {};
+window.TVMIDE_DICTIONARIES.arabic = [
     "رووداو",
     "كردستان",
     "بغداد",
