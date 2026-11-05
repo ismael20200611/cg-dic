@@ -1,5 +1,5 @@
-window.RUDAW_DICTIONARIES = window.RUDAW_DICTIONARIES || {};
-window.RUDAW_DICTIONARIES.persian = [
+window.TVMIDE_DICTIONARIES = window.TVMIDE_DICTIONARIES || {};
+window.TVMIDE_DICTIONARIES.persian = [
     "کردستان",
     "بغداد",
     "اربیل",
