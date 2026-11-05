@@ -1,18 +1,19 @@
 /**
- * RUDAW CG DESK - Main Application Logic
- * Multilingual Dictionary-Based OCR & Live Camera Word Recognition System
+ * TV MIDE CG DESK - Main Application Logic
+ * Multilingual Dictionary-Based OCR & Live Camera/Screen Share Recognition System
  */
 
 document.addEventListener("DOMContentLoaded", () => {
     // Application State
     const state = {
         currentLanguage: "sorani",
-        userWords: {}, // { sorani: [...], english: [...], etc. }
+        userWords: {}, 
         history: [],
         cameraStream: null,
         ocrWorker: null,
         isScanning: false,
-        lastOcrResult: null // Stores last OCR word boxes for instant reactive redraw
+        lastOcrResult: null,
+        currentRotation: 0 // 0, 90, 180, 270
     };
 
     // DOM Elements
@@ -20,14 +21,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const dictCountBadge = document.getElementById("dict-count-badge");
     const ocrStatusBadge = document.getElementById("ocr-status-badge");
 
-    // Camera Elements
+    // Capture & Fullscreen / OSD Elements
+    const cameraViewportContainer = document.getElementById("camera-viewport-container");
     const cameraVideo = document.getElementById("camera-video");
     const overlayCanvas = document.getElementById("overlay-canvas");
     const cameraPlaceholder = document.getElementById("camera-placeholder");
+    const cameraOsdMenu = document.getElementById("camera-osd-menu");
+    
     const btnStartCamera = document.getElementById("btn-start-camera");
+    const btnStartScreenShare = document.getElementById("btn-start-screen-share");
     const btnStopCamera = document.getElementById("btn-stop-camera");
     const btnScanNow = document.getElementById("btn-scan-now");
+    const btnFullscreenMain = document.getElementById("btn-fullscreen-main");
+    const btnRotateMain = document.getElementById("btn-rotate-main");
     const imageUploadInput = document.getElementById("image-upload-input");
+
+    // OSD Menu Buttons
+    const btnOsdScan = document.getElementById("btn-osd-scan");
+    const btnOsdStop = document.getElementById("btn-osd-stop");
+    const btnRotateScreen = document.getElementById("btn-rotate-screen");
+    const btnToggleFullscreen = document.getElementById("btn-toggle-fullscreen");
 
     // Text Checker Elements
     const textCheckerInput = document.getElementById("text-checker-input");
@@ -52,15 +65,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // OCR Tesseract Language Mapping
     const tesseractLangMap = {
-        sorani: "ara", // Arabic script fallback for Sorani
-        kurmanji: "eng", // Latin script fallback for Kurmanji
+        sorani: "ara", 
+        kurmanji: "eng", 
         arabic: "ara",
         english: "eng",
         turkish: "tur",
         persian: "fas"
     };
 
-    // --- Initialization ---
+    let osdHideTimeout = null;
+
     function init() {
         loadLocalStorage();
         updateDictionaryUI();
@@ -68,14 +82,13 @@ document.addEventListener("DOMContentLoaded", () => {
         initTesseractWorker();
     }
 
-    // Load user added words & history from localStorage
     function loadLocalStorage() {
         try {
-            const savedUserWords = localStorage.getItem("rudaw_user_words_v2");
+            const savedUserWords = localStorage.getItem("tvmide_user_words_v2");
             if (savedUserWords) {
                 state.userWords = JSON.parse(savedUserWords);
             }
-            const savedHistory = localStorage.getItem("rudaw_scan_history_v2");
+            const savedHistory = localStorage.getItem("tvmide_scan_history_v2");
             if (savedHistory) {
                 state.history = JSON.parse(savedHistory);
                 renderHistory();
@@ -86,19 +99,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function saveUserWords() {
-        localStorage.setItem("rudaw_user_words_v2", JSON.stringify(state.userWords));
+        localStorage.setItem("tvmide_user_words_v2", JSON.stringify(state.userWords));
     }
 
     function saveHistory() {
-        localStorage.setItem("rudaw_scan_history_v2", JSON.stringify(state.history));
+        localStorage.setItem("tvmide_scan_history_v2", JSON.stringify(state.history));
     }
 
-    // Get combined dictionary (Base JS + LocalStorage user additions) for a language
+    // Case-insensitive active dictionary lookup
     function getActiveDictionary(lang = state.currentLanguage) {
-        const baseDict = (window.RUDAW_DICTIONARIES && window.RUDAW_DICTIONARIES[lang]) || [];
+        const baseDict = (window.TVMIDE_DICTIONARIES && window.TVMIDE_DICTIONARIES[lang]) || [];
         const userList = (state.userWords && state.userWords[lang]) || [];
-        // Combine into a Set for O(1) membership check and remove duplicates
-        return new Set([...baseDict, ...userList]);
+        const combined = [...baseDict, ...userList].map(w => w.trim().toLowerCase());
+        return new Set(combined);
     }
 
     // --- Dictionary Manager Functions ---
@@ -114,7 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let count = 0;
 
         sortedWords.forEach(word => {
-            if (searchTerm && !word.toLowerCase().includes(searchTerm)) return;
+            if (searchTerm && !word.includes(searchTerm)) return;
             count++;
 
             const li = document.createElement("li");
@@ -129,7 +142,6 @@ document.addEventListener("DOMContentLoaded", () => {
             dictionaryWordList.innerHTML = `<li style="justify-content: center; color: var(--text-muted);">No words found.</li>`;
         }
 
-        // Attach delete event listeners
         document.querySelectorAll(".btn-delete-word").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 const wordToRemove = e.target.getAttribute("data-word");
@@ -139,7 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function addWordToDictionary(word) {
-        const cleanWord = word.trim();
+        const cleanWord = word.trim().toLowerCase();
         if (!cleanWord) return;
 
         const lang = state.currentLanguage;
@@ -147,7 +159,6 @@ document.addEventListener("DOMContentLoaded", () => {
             state.userWords[lang] = [];
         }
 
-        // Check if already in base or user dictionary
         const dictSet = getActiveDictionary(lang);
         if (dictSet.has(cleanWord)) {
             alert(`"${cleanWord}" already exists in the ${lang} dictionary.`);
@@ -159,13 +170,10 @@ document.addEventListener("DOMContentLoaded", () => {
         updateDictionaryUI();
         newWordInput.value = "";
 
-        // REQUIREMENT 7: IMMEDIATE UPDATE AFTER ADDING A WORD
-        // If there is an active OCR result displayed on the camera overlay, instantly redraw/re-evaluate!
         if (state.lastOcrResult) {
             drawOcrOverlay(state.lastOcrResult);
         }
 
-        // Also re-run text checker if text is present
         if (textCheckerInput.value.trim()) {
             runTextCheck();
         }
@@ -173,16 +181,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function removeWordFromDictionary(word) {
         const lang = state.currentLanguage;
-        const baseDict = (window.RUDAW_DICTIONARIES && window.RUDAW_DICTIONARIES[lang]) || [];
+        const baseDict = ((window.TVMIDE_DICTIONARIES && window.TVMIDE_DICTIONARIES[lang]) || []).map(w => w.toLowerCase());
 
-        // If it's in base dictionary, we cannot remove it from static files directly, but we can check if it's in user words
         if (baseDict.includes(word)) {
             alert("This word is part of the core base dictionary file and cannot be removed directly. You can only remove user-added custom words.");
             return;
         }
 
         if (state.userWords[lang]) {
-            state.userWords[lang] = state.userWords[lang].filter(w => w !== word);
+            state.userWords[lang] = state.userWords[lang].filter(w => w.toLowerCase() !== word);
             saveUserWords();
             updateDictionaryUI();
 
@@ -192,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // --- Text Checker Mode ---
+    // --- Case-Insensitive Text Checker Mode ---
     function runTextCheck() {
         const text = textCheckerInput.value.trim();
         if (!text) {
@@ -201,7 +208,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const dictSet = getActiveDictionary(state.currentLanguage);
-        // Normalize and split into words (preserving spaces/punctuation handling)
         const rawWords = text.split(/\s+/);
         
         let recognizedCount = 0;
@@ -209,7 +215,6 @@ document.addEventListener("DOMContentLoaded", () => {
         let htmlOutput = "";
 
         rawWords.forEach(token => {
-            // Clean punctuation for dictionary lookup while keeping original token display
             const cleanToken = token.replace(/^[^\w\u0600-\u06FF]+|[^\w\u0600-\u06FF]+$/g, "");
             
             if (!cleanToken) {
@@ -217,19 +222,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const isFound = dictSet.has(cleanToken);
+            const isFound = dictSet.has(cleanToken.toLowerCase());
             if (isFound) {
                 recognizedCount++;
                 htmlOutput += `<span class="word-pill registered" title="Registered in dictionary">${token}</span> `;
             } else {
                 unregisteredCount++;
-                htmlOutput += `<span class="word-pill unregistered" title="Not found in dictionary (Click to add)" style="cursor:pointer;" onclick="window.rudawAddWordPrompt('${cleanToken}')">${token}</span> `;
+                htmlOutput += `<span class="word-pill unregistered" title="Not found in dictionary (Click to add)" style="cursor:pointer;" onclick="window.tvmideAddWordPrompt('${cleanToken}')">${token}</span> `;
             }
         });
 
         textCheckerResults.innerHTML = htmlOutput;
 
-        // Log history
         addHistoryRecord({
             type: "Text Check",
             language: state.currentLanguage,
@@ -238,15 +242,14 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Global helper for clicking unregistered words in text checker
-    window.rudawAddWordPrompt = function(word) {
+    window.tvmideAddWordPrompt = function(word) {
         if (confirm(`Do you want to add "${word}" to the ${state.currentLanguage} dictionary?`)) {
             addWordToDictionary(word);
             runTextCheck();
         }
     };
 
-    // --- OCR & Camera System ---
+    // --- OCR & Capture System ---
     async function initTesseractWorker() {
         try {
             ocrStatusBadge.textContent = "Loading OCR...";
@@ -290,20 +293,51 @@ document.addEventListener("DOMContentLoaded", () => {
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
             };
             state.cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-            cameraVideo.srcObject = state.cameraStream;
-            cameraVideo.style.display = "block";
-            cameraPlaceholder.style.display = "none";
-
-            btnStartCamera.disabled = true;
-            btnStopCamera.disabled = false;
-            btnScanNow.disabled = false;
-
-            // Start periodic scan loop
-            state.isScanning = true;
-            scanCameraLoop();
+            setupActiveStream();
         } catch (err) {
             alert("Camera access denied or unavailable: " + err.message);
         }
+    }
+
+    async function startScreenShare() {
+        try {
+            const constraints = {
+                video: { cursor: "always" },
+                audio: false
+            };
+            state.cameraStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+            
+            // If user clicks "Stop Sharing" on native browser bar
+            state.cameraStream.getVideoTracks()[0].onended = () => {
+                stopCamera();
+            };
+
+            setupActiveStream();
+            addHistoryRecord({
+                type: "Screen Share",
+                language: state.currentLanguage,
+                summary: "Live screen/window share capture active.",
+                source: "DisplayMedia API"
+            });
+        } catch (err) {
+            console.error("Screen share permission denied or cancelled:", err);
+        }
+    }
+
+    function setupActiveStream() {
+        cameraVideo.srcObject = state.cameraStream;
+        cameraVideo.style.display = "block";
+        cameraPlaceholder.style.display = "none";
+
+        btnStartCamera.disabled = true;
+        btnStartScreenShare.disabled = true;
+        btnStopCamera.disabled = false;
+        btnScanNow.disabled = false;
+        btnFullscreenMain.disabled = false;
+        btnRotateMain.disabled = false;
+
+        state.isScanning = true;
+        scanCameraLoop();
     }
 
     function stopCamera() {
@@ -316,16 +350,19 @@ document.addEventListener("DOMContentLoaded", () => {
         cameraPlaceholder.style.display = "block";
         const ctx = overlayCanvas.getContext("2d");
         ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        cameraOsdMenu.classList.remove("visible");
 
         btnStartCamera.disabled = false;
+        btnStartScreenShare.disabled = false;
         btnStopCamera.disabled = true;
         btnScanNow.disabled = true;
+        btnFullscreenMain.disabled = true;
+        btnRotateMain.disabled = true;
     }
 
     async function scanCameraLoop() {
         if (!state.isScanning) return;
         await performOcrOnVideoFrame();
-        // Loop every 3 seconds for live scanning
         if (state.isScanning) {
             setTimeout(scanCameraLoop, 3000);
         }
@@ -342,11 +379,38 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
 
             const result = await state.ocrWorker.recognize(canvas);
-            state.lastOcrResult = result; // Save for instant updates
+            state.lastOcrResult = result;
             drawOcrOverlay(result);
         } catch (err) {
             console.error("OCR Frame error:", err);
         }
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            cameraViewportContainer.requestFullscreen().catch(err => {
+                alert(err.message);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    function rotateCameraView() {
+        state.currentRotation = (state.currentRotation + 90) % 360;
+        cameraVideo.style.transform = `rotate(${state.currentRotation}deg)`;
+        overlayCanvas.style.transform = `rotate(${state.currentRotation}deg)`;
+    }
+
+    // Auto-showing and auto-hiding OSD Menu on touch/click
+    function triggerOsdMenu() {
+        if (!state.cameraStream) return;
+        cameraOsdMenu.classList.add("visible");
+        
+        if (osdHideTimeout) clearTimeout(osdHideTimeout);
+        osdHideTimeout = setTimeout(() => {
+            cameraOsdMenu.classList.remove("visible");
+        }, 3500);
     }
 
     async function processUploadedImage(file) {
@@ -360,8 +424,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
             const imageUrl = URL.createObjectURL(file);
-            
-            // Draw image on camera preview area or create preview
             const img = new Image();
             img.src = imageUrl;
             img.onload = async () => {
@@ -411,33 +473,24 @@ document.addEventListener("DOMContentLoaded", () => {
             const cleanWord = wordText.replace(/^[^\w\u0600-\u06FF]+|[^\w\u0600-\u06FF]+$/g, "");
             if (!cleanWord) return;
 
-            const isFound = dictSet.has(cleanWord);
+            const isFound = dictSet.has(cleanWord.toLowerCase());
             if (isFound) recognizedCount++;
             else unregisteredCount++;
 
             const bbox = w.bbox;
-            // Draw bounding box
             ctx.strokeStyle = isFound ? "rgba(34, 197, 94, 0.8)" : "rgba(239, 68, 68, 0.9)";
             ctx.lineWidth = 2;
             ctx.strokeRect(bbox.x0, bbox.y0, bbox.x1 - bbox.x0, bbox.y1 - bbox.y0);
 
-            // Draw background pill for text readability
             ctx.fillStyle = isFound ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.3)";
             ctx.fillRect(bbox.x0, bbox.y0 - 18, bbox.x1 - bbox.x0, 18);
 
-            // Draw word text
             ctx.fillStyle = "#ffffff";
             ctx.font = "12px sans-serif";
             ctx.fillText(wordText, bbox.x0 + 2, bbox.y0 - 5);
         });
-
-        // Update history if live scan
-        if (state.isScanning && ocrResult.data.words.length > 0) {
-            // throttle history logging for live cam
-        }
     }
 
-    // --- History & Reporting ---
     function addHistoryRecord(record) {
         const fullRecord = {
             timestamp: new Date().toLocaleString(),
@@ -463,7 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <strong>[${item.type}] - Lang: ${item.language.toUpperCase()}</strong>
                 <span>${item.summary}</span>
                 <div class="history-meta">
-                    <span>Source: ${item.source ? item.source.substring(0, 30) : 'Live Camera'}</span>
+                    <span>Source: ${item.source ? item.source.substring(0, 30) : 'Live Stream'}</span>
                     <span>${item.timestamp}</span>
                 </div>
             `;
@@ -471,9 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- Event Listeners Setup ---
     function setupEventListeners() {
-        // Language Change
         languageSelect.addEventListener("change", (e) => {
             state.currentLanguage = e.target.value;
             updateDictionaryUI();
@@ -483,7 +534,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         });
 
-        // Add Word
         btnAddWord.addEventListener("click", () => {
             addWordToDictionary(newWordInput.value);
         });
@@ -491,12 +541,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (e.key === "Enter") addWordToDictionary(newWordInput.value);
         });
 
-        // Dictionary Search
         dictSearchInput.addEventListener("input", () => {
             updateDictionaryUI();
         });
 
-        // Reset Dictionary
         btnResetDict.addEventListener("click", () => {
             if (confirm(`Reset all user-added words for ${state.currentLanguage}? Core base dictionary will remain intact.`)) {
                 state.userWords[state.currentLanguage] = [];
@@ -505,19 +553,17 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Export Dictionary JSON
         btnExportDict.addEventListener("click", () => {
             const dictSet = getActiveDictionary(state.currentLanguage);
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(Array.from(dictSet), null, 2));
             const downloadAnchor = document.createElement("a");
             downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `rudaw_dict_${state.currentLanguage}.json`);
+            downloadAnchor.setAttribute("download", `tvmide_dict_${state.currentLanguage}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
         });
 
-        // Import Dictionary JSON
         importDictInput.addEventListener("change", (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -528,7 +574,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (Array.isArray(importedWords)) {
                         if (!state.userWords[state.currentLanguage]) state.userWords[state.currentLanguage] = [];
                         const currentSet = new Set(state.userWords[state.currentLanguage]);
-                        importedWords.forEach(w => currentSet.add(w));
+                        importedWords.forEach(w => currentSet.add(w.toLowerCase()));
                         state.userWords[state.currentLanguage] = Array.from(currentSet);
                         saveUserWords();
                         updateDictionaryUI();
@@ -543,7 +589,6 @@ document.addEventListener("DOMContentLoaded", () => {
             reader.readAsText(file);
         });
 
-        // Text Checker Buttons
         btnCheckText.addEventListener("click", runTextCheck);
         btnClearText.addEventListener("click", () => {
             textCheckerInput.value = "";
@@ -555,20 +600,32 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("Results copied to clipboard.");
         });
 
-        // Camera Buttons
+        // Capture, Screen Share & OSD Events
         btnStartCamera.addEventListener("click", startCamera);
+        btnStartScreenShare.addEventListener("click", startScreenShare);
         btnStopCamera.addEventListener("click", stopCamera);
         btnScanNow.addEventListener("click", performOcrOnVideoFrame);
+        btnFullscreenMain.addEventListener("click", toggleFullscreen);
+        btnRotateMain.addEventListener("click", rotateCameraView);
+
+        // OSD menu button bindings
+        btnOsdScan.addEventListener("click", performOcrOnVideoFrame);
+        btnOsdStop.addEventListener("click", stopCamera);
+        btnRotateScreen.addEventListener("click", rotateCameraView);
+        btnToggleFullscreen.addEventListener("click", toggleFullscreen);
+
+        // Touch/Click viewport to trigger auto-hiding OSD menu
+        cameraViewportContainer.addEventListener("click", triggerOsdMenu);
+        cameraViewportContainer.addEventListener("touchstart", triggerOsdMenu);
 
         imageUploadInput.addEventListener("change", (e) => {
             const file = e.target.files[0];
             if (file) processUploadedImage(file);
         });
 
-        // Report Export
         btnExportReport.addEventListener("click", () => {
             const reportData = {
-                app: "RUDAW CG DESK",
+                app: "TV MIDE CG DESK",
                 timestamp: new Date().toISOString(),
                 activeLanguage: state.currentLanguage,
                 totalDictionaryWords: getActiveDictionary(state.currentLanguage).size,
@@ -577,7 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reportData, null, 2));
             const downloadAnchor = document.createElement("a");
             downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `rudaw_cg_report_${Date.now()}.json`);
+            downloadAnchor.setAttribute("download", `tvmide_cg_report_${Date.now()}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
@@ -592,6 +649,5 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Run initialization
     init();
 });
