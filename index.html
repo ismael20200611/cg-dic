@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUDAW CG DESK - Multilingual Dictionary OCR & Text Checker</title>
+    <link rel="stylesheet" href="css/stel.css">
+    <!-- Tesseract.js CDN for browser OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <!-- Top Broadcast Header -->
+    <header class="cg-header">
+        <div class="brand">
+            <span class="live-dot"></span>
+            <h1>RUDAW CG DESK</h1>
+            <span class="subtitle">Broadcast Multilingual Dictionary Recognition & OCR</span>
+        </div>
+        <div class="header-actions">
+            <button id="btn-export-report" class="btn secondary">Export Report</button>
+            <button id="btn-clear-history" class="btn danger">Clear History</button>
+        </div>
+    </header>
+
+    <main class="cg-container">
+        <!-- Control Bar: Language & Mode Selection -->
+        <section class="panel control-panel">
+            <div class="control-group">
+                <label for="language-select">Active Language:</label>
+                <select id="language-select">
+                    <option value="sorani">Sorani Kurdish (کوردی سۆرانی)</option>
+                    <option value="kurmanji">Kurmanji Kurdish (Kurmancî)</option>
+                    <option value="arabic">Arabic (العربية)</option>
+                    <option value="english">English</option>
+                    <option value="turkish">Turkish (Türkçe)</option>
+                    <option value="persian">Persian (فارسی)</option>
+                </select>
+            </div>
+            <div class="status-indicator">
+                <span id="dict-count-badge">Dictionary Words: 0</span>
+                <span id="ocr-status-badge" class="badge idle">OCR Ready</span>
+            </div>
+        </section>
+
+        <div class="workspace-grid">
+            <!-- Left Column: Live Camera & OCR & Text Checker -->
+            <div class="column-primary">
+                <!-- Camera & Live OCR Scanner -->
+                <section class="panel camera-panel">
+                    <h2>Live Camera & Image OCR Scanner</h2>
+                    <div class="camera-viewport-wrapper">
+                        <video id="camera-video" autoplay playsinline muted></video>
+                        <canvas id="overlay-canvas"></canvas>
+                        <div id="camera-placeholder" class="camera-placeholder">
+                            <p>Camera inactive. Click "Start Camera" or upload an image.</p>
+                        </div>
+                    </div>
+                    <div class="camera-controls">
+                        <button id="btn-start-camera" class="btn primary">Start Camera</button>
+                        <button id="btn-stop-camera" class="btn secondary" disabled>Stop Camera</button>
+                        <button id="btn-scan-now" class="btn accent" disabled>Scan Current Frame</button>
+                        <label class="btn secondary upload-btn">
+                            Upload Image <input type="file" id="image-upload-input" accept="image/*" hidden>
+                        </label>
+                    </div>
+                    <div class="legend">
+                        <span class="legend-item"><span class="box-sample green"></span> Approved Dictionary Word</span>
+                        <span class="legend-item"><span class="box-sample red"></span> Unregistered / New Word</span>
+                    </div>
+                </section>
+
+                <!-- Text Checker Mode -->
+                <section class="panel text-checker-panel">
+                    <h2>Manual Text Checker</h2>
+                    <textarea id="text-checker-input" placeholder="Paste or type broadcast lower thirds, headlines, or captions here..."></textarea>
+                    <div class="button-row">
+                        <button id="btn-check-text" class="btn primary">Check Text</button>
+                        <button id="btn-clear-text" class="btn secondary">Clear</button>
+                        <button id="btn-copy-text" class="btn secondary">Copy Results</button>
+                    </div>
+                    <div id="text-checker-results" class="results-box">
+                        <p class="placeholder-text">Checked words will appear here with membership status...</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Dictionary Manager & History -->
+            <div class="column-secondary">
+                <!-- Dictionary Manager -->
+                <section class="panel dictionary-manager-panel">
+                    <h2>Dictionary Manager</h2>
+                    <div class="dict-form-group">
+                        <input type="text" id="new-word-input" placeholder="Add approved word...">
+                        <button id="btn-add-word" class="btn primary">Add</button>
+                    </div>
+                    <div class="dict-search-group">
+                        <input type="text" id="dict-search-input" placeholder="Search dictionary...">
+                    </div>
+                    <div class="dict-actions-row">
+                        <button id="btn-export-dict" class="btn secondary">Export JSON</button>
+                        <label class="btn secondary upload-btn">
+                            Import JSON <input type="file" id="import-dict-input" accept=".json" hidden>
+                        </label>
+                        <button id="btn-reset-dict" class="btn danger">Reset User Words</button>
+                    </div>
+                    <div class="dictionary-list-container">
+                        <ul id="dictionary-word-list">
+                            <!-- Populated dynamically -->
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Scan History & Analytics -->
+                <section class="panel history-panel">
+                    <h2>Scan & Check History</h2>
+                    <div id="history-list" class="history-list">
+                        <p class="placeholder-text">No scan history yet.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- App Scripts -->
+    <script src="js/dictionaries/sorani.js"></script>
+    <script src="js/dictionaries/kurmanji.js"></script>
+    <script src="js/dictionaries/arabic.js"></script>
+    <script src="js/dictionaries/english.js"></script>
+    <script src="js/dictionaries/turkish.js"></script>
+    <script src="js/dictionaries/persian.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
