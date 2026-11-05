@@ -49,7 +49,7 @@
                 <section class="panel camera-panel">
                     <h2>Live Camera, Screen Share & Image OCR Scanner</h2>
                     
-                    <!-- Camera Viewport Container (Handles Fullscreen & Auto-hiding OSD Menu) -->
+                    <!-- Camera Viewport Container (Handles Fullscreen & Auto-hiding Menu) -->
                     <div id="camera-viewport-container" class="camera-viewport-wrapper">
                         <video id="camera-video" autoplay playsinline muted></video>
                         <canvas id="overlay-canvas"></canvas>
@@ -67,8 +67,12 @@
                                 <button id="btn-osd-scan" class="btn-osd accent">Scan Now</button>
                                 <button id="btn-osd-stop" class="btn-osd danger">Stop</button>
                             </div>
-                            <!-- Hardware Camera Adjustments (Focus, Brightness, ISO) -->
+                            <!-- Hardware Camera Adjustments & Scan Speed -->
                             <div class="osd-sliders-row" id="hardware-fx-row">
+                                <div class="slider-group">
+                                    <label>Scan Speed: <span id="scan-interval-val">3s</span></label>
+                                    <input type="range" id="range-scan-speed" min="1" max="10" step="1" value="3">
+                                </div>
                                 <div class="slider-group">
                                     <label>ISO: <span id="iso-val">Auto</span></label>
                                     <input type="range" id="range-iso" min="100" max="1600" step="100" value="400">
@@ -80,7 +84,7 @@
                                 <div class="slider-group">
                                     <label>Focus:</label>
                                     <select id="select-focus">
-                                        <option value="continuous">Auto (Continuous)</option>
+                                        <option value="continuous">Auto</option>
                                         <option value="macro">Macro</option>
                                         <option value="manual">Manual</option>
                                     </select>
