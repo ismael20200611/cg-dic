@@ -2,9 +2,9 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RUDAW CG DESK - Multilingual Dictionary OCR & Text Checker</title>
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TV MIDE CG DESK - Multilingual Dictionary OCR & Text Checker</title>
+    <link rel="stylesheet" href="css/stel.css">
     <!-- Tesseract.js CDN for browser OCR -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
 </head>
@@ -13,7 +13,7 @@
     <header class="cg-header">
         <div class="brand">
             <span class="live-dot"></span>
-            <h1>RUDAW CG DESK</h1>
+            <h1>TV MIDE CG DESK</h1>
             <span class="subtitle">Broadcast Multilingual Dictionary Recognition & OCR</span>
         </div>
         <div class="header-actions">
@@ -43,22 +43,40 @@
         </section>
 
         <div class="workspace-grid">
-            <!-- Left Column: Live Camera & OCR & Text Checker -->
+            <!-- Left Column: Live Camera, Screen Share, & Text Checker -->
             <div class="column-primary">
-                <!-- Camera & Live OCR Scanner -->
+                <!-- Camera & Screen Share OCR Scanner -->
                 <section class="panel camera-panel">
-                    <h2>Live Camera & Image OCR Scanner</h2>
-                    <div class="camera-viewport-wrapper">
+                    <h2>Live Camera, Screen Share & Image OCR Scanner</h2>
+                    
+                    <!-- Camera Viewport Container (Handles Fullscreen & Auto-hiding OSD Menu) -->
+                    <div id="camera-viewport-container" class="camera-viewport-wrapper">
                         <video id="camera-video" autoplay playsinline muted></video>
                         <canvas id="overlay-canvas"></canvas>
+                        
                         <div id="camera-placeholder" class="camera-placeholder">
-                            <p>Camera inactive. Click "Start Camera" or upload an image.</p>
+                            <p>Capture inactive. Start camera, share a screen/window, or upload an image.</p>
+                        </div>
+
+                        <!-- Professional Auto-Hiding Camera Settings Menu Overlay -->
+                        <div id="camera-osd-menu" class="camera-osd-menu">
+                            <div class="osd-title">PRO STREAM SETTINGS</div>
+                            <div class="osd-controls-grid">
+                                <button id="btn-rotate-screen" class="btn-osd" title="Rotate View">Rotate 90°</button>
+                                <button id="btn-toggle-fullscreen" class="btn-osd" title="Toggle Fullscreen">Fullscreen</button>
+                                <button id="btn-osd-scan" class="btn-osd accent">Scan Now</button>
+                                <button id="btn-osd-stop" class="btn-osd danger">Stop</button>
+                            </div>
                         </div>
                     </div>
+
                     <div class="camera-controls">
                         <button id="btn-start-camera" class="btn primary">Start Camera</button>
-                        <button id="btn-stop-camera" class="btn secondary" disabled>Stop Camera</button>
+                        <button id="btn-start-screen-share" class="btn primary">Share Screen / Window</button>
+                        <button id="btn-stop-camera" class="btn secondary" disabled>Stop Capture</button>
                         <button id="btn-scan-now" class="btn accent" disabled>Scan Current Frame</button>
+                        <button id="btn-fullscreen-main" class="btn secondary" disabled>Full Screen</button>
+                        <button id="btn-rotate-main" class="btn secondary" disabled>Rotate 90°</button>
                         <label class="btn secondary upload-btn">
                             Upload Image <input type="file" id="image-upload-input" accept="image/*" hidden>
                         </label>
