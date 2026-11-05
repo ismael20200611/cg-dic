@@ -13,7 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ocrWorker: null,
         isScanning: false,
         lastOcrResult: null,
-        currentRotation: 0 // 0, 90, 180, 270
+        currentRotation: 0,
+        scanIntervalMs: 3000 // Configurable scan speed timer (default 3 seconds)
     };
 
     // DOM Elements
@@ -42,6 +43,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnRotateScreen = document.getElementById("btn-rotate-screen");
     const btnToggleFullscreen = document.getElementById("btn-toggle-fullscreen");
     
+    const rangeScanSpeed = document.getElementById("range-scan-speed");
+    const scanIntervalVal = document.getElementById("scan-interval-val");
     const rangeIso = document.getElementById("range-iso");
     const isoVal = document.getElementById("iso-val");
     const rangeBrightness = document.getElementById("range-brightness");
@@ -364,7 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!state.isScanning) return;
         await performOcrOnVideoFrame();
         if (state.isScanning) {
-            setTimeout(scanCameraLoop, 3000);
+            setTimeout(scanCameraLoop, state.scanIntervalMs);
         }
     }
 
@@ -386,16 +389,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // --- Fixed Fullscreen (Including iOS / iPhone Webkit Support) ---
+    // --- Fixed Cross-Platform Fullscreen (Including iOS Safari & iPhone Support) ---
     function toggleFullscreen() {
         const el = cameraViewportContainer;
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const isInFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+
+        if (!isInFullscreen) {
             if (el.requestFullscreen) {
-                el.requestFullscreen().catch(err => alert(err.message));
-            } else if (el.webkitRequestFullscreen) { /* Safari / iOS / iPhone support */
+                el.requestFullscreen().catch(err => console.log(err));
+            } else if (el.webkitRequestFullscreen) { 
                 el.webkitRequestFullscreen();
-            } else if (cameraVideo.webkitEnterFullscreen) { /* Fallback for iOS video element */
+            } else if (cameraVideo.webkitEnterFullscreen) { 
                 cameraVideo.webkitEnterFullscreen();
+            } else {
+                el.classList.toggle("css-fullscreen-fallback");
             }
         } else {
             if (document.exitFullscreen) {
@@ -412,15 +419,23 @@ document.addEventListener("DOMContentLoaded", () => {
         overlayCanvas.style.transform = `rotate(${state.currentRotation}deg)`;
     }
 
-    // --- Hardware Camera FX (ISO, Brightness, Focus) ---
     async function applyCameraConstraints(constraintSettings) {
         if (!state.cameraStream) return;
         const track = state.cameraStream.getVideoTracks()[0];
         if (!track) return;
         try {
-            await track.applyConstraints({ advanced: [constraintSettings] });
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            const supportedConstraints = {};
+            for (const key in constraintSettings) {
+                if (capabilities[key] || key === 'exposureCompensation' || key === 'iso') {
+                    supportedConstraints[key] = constraintSettings[key];
+                }
+            }
+            if (Object.keys(supportedConstraints).length > 0) {
+                await track.applyConstraints({ advanced: [supportedConstraints] });
+            }
         } catch (err) {
-            console.warn("Hardware camera constraint not supported on this device/browser:", err);
+            console.warn("Hardware parameter adjustment restricted by OS/browser environment.", err);
         }
     }
 
@@ -431,7 +446,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (osdHideTimeout) clearTimeout(osdHideTimeout);
         osdHideTimeout = setTimeout(() => {
             cameraOsdMenu.classList.remove("visible");
-        }, 5000); // 5 seconds display for adjusting sliders
+        }, 5000);
     }
 
     async function processUploadedImage(file) {
@@ -635,6 +650,13 @@ document.addEventListener("DOMContentLoaded", () => {
         btnRotateScreen.addEventListener("click", rotateCameraView);
         btnToggleFullscreen.addEventListener("click", toggleFullscreen);
 
+        // Scan Speed Timer Slider
+        rangeScanSpeed.addEventListener("input", (e) => {
+            const seconds = e.target.value;
+            state.scanIntervalMs = seconds * 1000;
+            scanIntervalVal.textContent = seconds + "s";
+        });
+
         // Hardware Controls Sliders
         rangeIso.addEventListener("input", (e) => {
             const val = e.target.value;
@@ -655,7 +677,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Touch/Click viewport to trigger auto-hiding OSD menu
         cameraViewportContainer.addEventListener("click", triggerOsdMenu);
-        cameraViewportContainer.addEventListener("touchstart", triggerOsdMenu);
+        cameraViewportContainer.addEventListener("touchstart", triggerOsdMenu, { passive: true });
 
         imageUploadInput.addEventListener("change", (e) => {
             const file = e.target.files[0];
