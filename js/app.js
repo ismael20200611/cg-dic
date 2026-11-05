@@ -36,11 +36,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnRotateMain = document.getElementById("btn-rotate-main");
     const imageUploadInput = document.getElementById("image-upload-input");
 
-    // OSD Menu Buttons
+    // OSD Menu Buttons & Hardware Controls
     const btnOsdScan = document.getElementById("btn-osd-scan");
     const btnOsdStop = document.getElementById("btn-osd-stop");
     const btnRotateScreen = document.getElementById("btn-rotate-screen");
     const btnToggleFullscreen = document.getElementById("btn-toggle-fullscreen");
+    
+    const rangeIso = document.getElementById("range-iso");
+    const isoVal = document.getElementById("iso-val");
+    const rangeBrightness = document.getElementById("range-brightness");
+    const expVal = document.getElementById("exp-val");
+    const selectFocus = document.getElementById("select-focus");
 
     // Text Checker Elements
     const textCheckerInput = document.getElementById("text-checker-input");
@@ -63,7 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnExportReport = document.getElementById("btn-export-report");
     const btnClearHistory = document.getElementById("btn-clear-history");
 
-    // OCR Tesseract Language Mapping
     const tesseractLangMap = {
         sorani: "ara", 
         kurmanji: "eng", 
@@ -106,7 +111,6 @@ document.addEventListener("DOMContentLoaded", () => {
         localStorage.setItem("tvmide_scan_history_v2", JSON.stringify(state.history));
     }
 
-    // Case-insensitive active dictionary lookup
     function getActiveDictionary(lang = state.currentLanguage) {
         const baseDict = (window.TVMIDE_DICTIONARIES && window.TVMIDE_DICTIONARIES[lang]) || [];
         const userList = (state.userWords && state.userWords[lang]) || [];
@@ -114,7 +118,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return new Set(combined);
     }
 
-    // --- Dictionary Manager Functions ---
     function updateDictionaryUI() {
         const lang = state.currentLanguage;
         const dictSet = getActiveDictionary(lang);
@@ -199,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // --- Case-Insensitive Text Checker Mode ---
     function runTextCheck() {
         const text = textCheckerInput.value.trim();
         if (!text) {
@@ -249,7 +251,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // --- OCR & Capture System ---
     async function initTesseractWorker() {
         try {
             ocrStatusBadge.textContent = "Loading OCR...";
@@ -307,7 +308,6 @@ document.addEventListener("DOMContentLoaded", () => {
             };
             state.cameraStream = await navigator.mediaDevices.getDisplayMedia(constraints);
             
-            // If user clicks "Stop Sharing" on native browser bar
             state.cameraStream.getVideoTracks()[0].onended = () => {
                 stopCamera();
             };
@@ -386,13 +386,23 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // --- Fixed Fullscreen (Including iOS / iPhone Webkit Support) ---
     function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            cameraViewportContainer.requestFullscreen().catch(err => {
-                alert(err.message);
-            });
+        const el = cameraViewportContainer;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (el.requestFullscreen) {
+                el.requestFullscreen().catch(err => alert(err.message));
+            } else if (el.webkitRequestFullscreen) { /* Safari / iOS / iPhone support */
+                el.webkitRequestFullscreen();
+            } else if (cameraVideo.webkitEnterFullscreen) { /* Fallback for iOS video element */
+                cameraVideo.webkitEnterFullscreen();
+            }
         } else {
-            document.exitFullscreen();
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
         }
     }
 
@@ -402,7 +412,18 @@ document.addEventListener("DOMContentLoaded", () => {
         overlayCanvas.style.transform = `rotate(${state.currentRotation}deg)`;
     }
 
-    // Auto-showing and auto-hiding OSD Menu on touch/click
+    // --- Hardware Camera FX (ISO, Brightness, Focus) ---
+    async function applyCameraConstraints(constraintSettings) {
+        if (!state.cameraStream) return;
+        const track = state.cameraStream.getVideoTracks()[0];
+        if (!track) return;
+        try {
+            await track.applyConstraints({ advanced: [constraintSettings] });
+        } catch (err) {
+            console.warn("Hardware camera constraint not supported on this device/browser:", err);
+        }
+    }
+
     function triggerOsdMenu() {
         if (!state.cameraStream) return;
         cameraOsdMenu.classList.add("visible");
@@ -410,7 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (osdHideTimeout) clearTimeout(osdHideTimeout);
         osdHideTimeout = setTimeout(() => {
             cameraOsdMenu.classList.remove("visible");
-        }, 3500);
+        }, 5000); // 5 seconds display for adjusting sliders
     }
 
     async function processUploadedImage(file) {
@@ -600,7 +621,7 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("Results copied to clipboard.");
         });
 
-        // Capture, Screen Share & OSD Events
+        // Camera, Screen Share & OSD Events
         btnStartCamera.addEventListener("click", startCamera);
         btnStartScreenShare.addEventListener("click", startScreenShare);
         btnStopCamera.addEventListener("click", stopCamera);
@@ -613,6 +634,24 @@ document.addEventListener("DOMContentLoaded", () => {
         btnOsdStop.addEventListener("click", stopCamera);
         btnRotateScreen.addEventListener("click", rotateCameraView);
         btnToggleFullscreen.addEventListener("click", toggleFullscreen);
+
+        // Hardware Controls Sliders
+        rangeIso.addEventListener("input", (e) => {
+            const val = e.target.value;
+            isoVal.textContent = val;
+            applyCameraConstraints({ iso: parseInt(val) });
+        });
+
+        rangeBrightness.addEventListener("input", (e) => {
+            const val = e.target.value;
+            expVal.textContent = val;
+            applyCameraConstraints({ exposureCompensation: parseFloat(val) });
+        });
+
+        selectFocus.addEventListener("change", (e) => {
+            const val = e.target.value;
+            applyCameraConstraints({ focusMode: val });
+        });
 
         // Touch/Click viewport to trigger auto-hiding OSD menu
         cameraViewportContainer.addEventListener("click", triggerOsdMenu);
