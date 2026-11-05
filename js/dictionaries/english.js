@@ -1,5 +1,5 @@
-window.RUDAW_DICTIONARIES = window.RUDAW_DICTIONARIES || {};
-window.RUDAW_DICTIONARIES.english = [
+window.TVMIDE_DICTIONARIES = window.TVMIDE_DICTIONARIES || {};
+window.TVMIDE_DICTIONARIES.english = [
     "Iraq",
     "Kurdistan",
     "Baghdad",
