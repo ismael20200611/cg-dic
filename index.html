@@ -1,174 +1,182 @@
+
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TV MIDE CG DESK - Multilingual Dictionary OCR & Text Checker</title>
-    <link rel="stylesheet" href="css/style.css">
-    <!-- Tesseract.js CDN for browser OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NWEZHYAN - 10 CG</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  font-family: Arial, sans-serif;
+  color: white;
+  background:
+    radial-gradient(ellipse at top left, #183566, transparent 55%),
+    linear-gradient(135deg, #071126, #030714);
+}
+
+.container {
+  width: min(100%, 850px);
+}
+
+header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+h1 {
+  font-size: clamp(32px, 5vw, 48px);
+  margin-bottom: 10px;
+}
+
+h1 span {
+  color: #22baff;
+}
+
+header p {
+  color: #b8c5e5;
+  font-size: 16px;
+}
+
+.line {
+  width: 80px;
+  height: 5px;
+  margin: 20px auto;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #00baff, #a52cff);
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.btn {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px;
+  border-radius: 17px;
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 16px;
+  border: 1px solid #ffffff30;
+  box-shadow: 0 8px 20px #0003;
+  cursor: pointer;
+  transition: transform .2s, filter .2s;
+}
+
+.btn:hover {
+  transform: translateY(-3px);
+  filter: brightness(1.15);
+}
+
+.number {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #ffffff30;
+}
+
+.arrow {
+  margin-left: auto;
+  font-size: 24px;
+}
+
+.blue   { background: linear-gradient(120deg,#008cff,#4938f5); }
+.purple { background: linear-gradient(120deg,#a13cff,#6428e8); }
+.green  { background: linear-gradient(120deg,#0fc878,#008f78); }
+.orange { background: linear-gradient(120deg,#ffb000,#ff6a00); }
+.red    { background: linear-gradient(120deg,#ff435f,#d90d48); }
+.cyan   { background: linear-gradient(120deg,#00c4df,#0877dc); }
+.violet { background: linear-gradient(120deg,#a04bff,#5632e9); }
+.teal   { background: linear-gradient(120deg,#00caa7,#008f9d); }
+.pink   { background: linear-gradient(120deg,#ed36ba,#b415ed); }
+.navy   { background: linear-gradient(120deg,#337cff,#4430d8); }
+
+footer {
+  text-align: center;
+  color: #8fa2ca;
+  font-size: 13px;
+  margin-top: 28px;
+}
+
+@media(max-width:540px) {
+  body {
+    padding: 18px;
+  }
+
+  .buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .btn {
+    min-height: 64px;
+  }
+}
+</style>
 </head>
+
 <body>
-    <!-- Top Broadcast Header -->
-    <header class="cg-header">
-        <div class="brand">
-            <span class="live-dot"></span>
-            <h1>TV MIDE CG DESK</h1>
-            <span class="subtitle">Broadcast Multilingual Dictionary Recognition & OCR</span>
-        </div>
-        <div class="header-actions">
-            <button id="btn-export-report" class="btn secondary">Export Report</button>
-            <button id="btn-clear-history" class="btn danger">Clear History</button>
-        </div>
-    </header>
 
-    <main class="cg-container">
-        <!-- Control Bar: Language & Mode Selection -->
-        <section class="panel control-panel">
-            <div class="control-group">
-                <label for="language-select">Active Language:</label>
-                <select id="language-select">
-                    <option value="sorani">Sorani Kurdish (کوردی سۆرانی)</option>
-                    <option value="kurmanji">Kurmanji Kurdish (Kurmancî)</option>
-                    <option value="arabic">Arabic (العربية)</option>
-                    <option value="english">English</option>
-                    <option value="turkish">Turkish (Türkçe)</option>
-                    <option value="persian">Persian (فارسی)</option>
-                </select>
-            </div>
-            <div class="status-indicator">
-                <span id="dict-count-badge">Dictionary Words: 0</span>
-                <span id="ocr-status-badge" class="badge idle">OCR Ready</span>
-            </div>
-        </section>
+<main class="container">
 
-        <div class="workspace-grid">
-            <!-- Left Column: Live Camera, Screen Share, & Text Checker -->
-            <div class="column-primary">
-                <!-- Camera & Screen Share OCR Scanner -->
-                <section class="panel camera-panel">
-                    <h2>Live Camera, Screen Share & Image OCR Scanner</h2>
-                    
-                    <!-- Camera Viewport Container (Handles Fullscreen & Auto-hiding Menu) -->
-                    <div id="camera-viewport-container" class="camera-viewport-wrapper">
-                        <video id="camera-video" autoplay playsinline muted></video>
-                        <canvas id="overlay-canvas"></canvas>
-                        
-                        <div id="camera-placeholder" class="camera-placeholder">
-                            <p>Capture inactive. Start camera, share a screen/window, or upload an image.</p>
-                        </div>
+  <header>
+    <h1>NWEZHYAN <span>4K 10</span> Links</h1>
+    <p>Choose a button to open a page</p>
+    <div class="line"></div>
+  </header>
 
-                        <!-- Professional Auto-Hiding Camera OSD Menu Overlay -->
-                        <div id="camera-osd-menu" class="camera-osd-menu">
-                            <div class="osd-title">PRO STREAM SETTINGS & HARDWARE FX</div>
-                            <div class="osd-controls-grid">
-                                <button id="btn-rotate-screen" class="btn-osd" title="Rotate View">Rotate 90°</button>
-                                <button id="btn-toggle-fullscreen" class="btn-osd" title="Toggle Fullscreen">Fullscreen</button>
-                                <button id="btn-osd-scan" class="btn-osd accent">Scan Now</button>
-                                <button id="btn-osd-stop" class="btn-osd danger">Stop</button>
-                            </div>
-                            <!-- Hardware Camera Adjustments & Scan Speed -->
-                            <div class="osd-sliders-row" id="hardware-fx-row">
-                                <div class="slider-group">
-                                    <label>Scan Speed: <span id="scan-interval-val">3s</span></label>
-                                    <input type="range" id="range-scan-speed" min="1" max="10" step="1" value="3">
-                                </div>
-                                <div class="slider-group">
-                                    <label>ISO: <span id="iso-val">Auto</span></label>
-                                    <input type="range" id="range-iso" min="100" max="1600" step="100" value="400">
-                                </div>
-                                <div class="slider-group">
-                                    <label>Exposure: <span id="exp-val">0</span></label>
-                                    <input type="range" id="range-brightness" min="-2" max="2" step="0.5" value="0">
-                                </div>
-                                <div class="slider-group">
-                                    <label>Focus:</label>
-                                    <select id="select-focus">
-                                        <option value="continuous">Auto</option>
-                                        <option value="macro">Macro</option>
-                                        <option value="manual">Manual</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+  <nav class="buttons" id="buttons"></nav>
 
-                    <div class="camera-controls">
-                        <button id="btn-start-camera" class="btn primary">Start Camera</button>
-                        <button id="btn-start-screen-share" class="btn primary">Share Screen / Window</button>
-                        <button id="btn-stop-camera" class="btn secondary" disabled>Stop Capture</button>
-                        <button id="btn-scan-now" class="btn accent" disabled>Scan Current Frame</button>
-                        <button id="btn-fullscreen-main" class="btn secondary" disabled>Full Screen</button>
-                        <button id="btn-rotate-main" class="btn secondary" disabled>Rotate 90°</button>
-                        <label class="btn secondary upload-btn">
-                            Upload Image <input type="file" id="image-upload-input" accept="image/*" hidden>
-                        </label>
-                    </div>
-                    <div class="legend">
-                        <span class="legend-item"><span class="box-sample green"></span> Approved Dictionary Word</span>
-                        <span class="legend-item"><span class="box-sample red"></span> Unregistered / New Word</span>
-                    </div>
-                </section>
+  <footer>© 2026 NWEZHYAN</footer>
 
-                <!-- Text Checker Mode -->
-                <section class="panel text-checker-panel">
-                    <h2>Manual Text Checker</h2>
-                    <textarea id="text-checker-input" placeholder="Paste or type broadcast lower thirds, headlines, or captions here..."></textarea>
-                    <div class="button-row">
-                        <button id="btn-check-text" class="btn primary">Check Text</button>
-                        <button id="btn-clear-text" class="btn secondary">Clear</button>
-                        <button id="btn-copy-text" class="btn secondary">Copy Results</button>
-                    </div>
-                    <div id="text-checker-results" class="results-box">
-                        <p class="placeholder-text">Checked words will appear here with membership status...</p>
-                    </div>
-                </section>
-            </div>
+</main>
 
-            <!-- Right Column: Dictionary Manager & History -->
-            <div class="column-secondary">
-                <!-- Dictionary Manager -->
-                <section class="panel dictionary-manager-panel">
-                    <h2>Dictionary Manager</h2>
-                    <div class="dict-form-group">
-                        <input type="text" id="new-word-input" placeholder="Add approved word...">
-                        <button id="btn-add-word" class="btn primary">Add</button>
-                    </div>
-                    <div class="dict-search-group">
-                        <input type="text" id="dict-search-input" placeholder="Search dictionary...">
-                    </div>
-                    <div class="dict-actions-row">
-                        <button id="btn-export-dict" class="btn secondary">Export JSON</button>
-                        <label class="btn secondary upload-btn">
-                            Import JSON <input type="file" id="import-dict-input" accept=".json" hidden>
-                        </label>
-                        <button id="btn-reset-dict" class="btn danger">Reset User Words</button>
-                    </div>
-                    <div class="dictionary-list-container">
-                        <ul id="dictionary-word-list">
-                            <!-- Populated dynamically -->
-                        </ul>
-                    </div>
-                </section>
+<script>
+const colors = [
+  "blue", "purple", "green", "orange", "red",
+  "cyan", "violet", "teal", "pink", "navy"
+];
 
-                <!-- Scan History & Analytics -->
-                <section class="panel history-panel">
-                    <h2>Scan & Check History</h2>
-                    <div id="history-list" class="history-list">
-                        <p class="placeholder-text">No scan history yet.</p>
-                    </div>
-                </section>
-            </div>
-        </div>
-    </main>
+const words = [
+  "One", "Two", "Three", "Four", "Five",
+  "Six", "Seven", "Eight", "Nine", "Ten"
+];
 
-    <!-- App Scripts -->
-    <script src="js/dictionaries/sorani.js"></script>
-    <script src="js/dictionaries/kurmanji.js"></script>
-    <script src="js/dictionaries/arabic.js"></script>
-    <script src="js/dictionaries/english.js"></script>
-    <script src="js/dictionaries/turkish.js"></script>
-    <script src="js/dictionaries/persian.js"></script>
-    <script src="js/app.js"></script>
+const buttons = document.getElementById("buttons");
+
+for (let i = 1; i <= 20; i++) {
+  const button = document.createElement("a");
+
+  // Page 1 -> 1.html, Page 2 -> 2.html ... Page 10 -> 10.html
+  button.href = i + ".html";
+  button.className = "btn " + colors[i - 1];
+
+  button.innerHTML = `
+    <span class="number">${String(i).padStart(2, "0")}</span>
+    <span>Page ${words[i - 1]}</span>
+    <span class="arrow">→</span>
+  `;
+
+  buttons.appendChild(button);
+}
+</script>
+
 </body>
 </html>
