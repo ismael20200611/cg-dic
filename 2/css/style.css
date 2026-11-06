@@ -1,0 +1,37 @@
+/* Quick Actions on Top of Viewfinder */
+.viewfinder-quick-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Crop Zone Visual Overlay */
+#crop-box-indicator {
+  position: absolute;
+  pointer-events: none;
+  border: 2px dashed rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  transition: all 0.3s ease;
+  z-index: 5;
+}
+
+#crop-box-indicator.crop-box-full {
+  display: none;
+}
+
+#crop-box-indicator.crop-box-lower-third {
+  display: block;
+  top: 60%;
+  left: 5%;
+  width: 90%;
+  height: 36%;
+}
+
+#crop-box-indicator.crop-box-ticker {
+  display: block;
+  top: 78%;
+  left: 2%;
+  width: 96%;
+  height: 18%;
+}
