@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TV Mide CG Desk — Pro Broadcast Vision</title>
+  <link rel="stylesheet" href="2/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body class="theme-dark">
+
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand-badge">TV MIDE PRO</div>
+      <div>
+        <h1 class="brand-title">TV MIDE CG DESK</h1>
+        <p class="brand-sub">Broadcast Live Graphics &amp; Smart Kurdish Morphology Engine</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="global-lang-box">
+        <label for="global-lang-select">Channel Lang:</label>
+        <select id="global-lang-select" class="lang-dropdown">
+          <option value="sorani">Kurdish Sorani (سۆرانی زیرەک)</option>
+          <option value="kurmanji">Kurdish Kurmancî</option>
+          <option value="arabic">Arabic (العربية)</option>
+          <option value="english">English (Global)</option>
+          <option value="turkish">Türkçe</option>
+          <option value="persian">Persian (فارسی)</option>
+        </select>
+      </div>
+      <button id="btn-export-full-report" class="btn btn-secondary btn-sm">Export Report</button>
+    </div>
+  </header>
+
+  <nav class="mode-tabs">
+    <button class="tab-link active" data-tab="tab-camera">Live Vision &amp; Stream</button>
+    <button class="tab-link" data-tab="tab-text">Text &amp; Script Checker</button>
+    <button class="tab-link" data-tab="tab-dictionary">Dictionary Manager</button>
+    <button class="tab-link" data-tab="tab-history">Audit History</button>
+  </nav>
+
+  <main class="main-content">
+    <section id="tab-camera" class="tab-pane active">
+      <div class="vision-grid">
+        <div class="panel viewfinder-panel" id="viewfinder-container">
+          
+          <div class="viewfinder-header">
+            <span class="live-pill" id="live-indicator"><span class="dot"></span> STANDBY</span>
+            <span class="source-tag" id="current-source-label">Source: None</span>
+            <span class="ocr-status-tag" id="ocr-badge">Engine Ready</span>
+            
+            <div class="viewfinder-quick-actions">
+              <button id="btn-toggle-sound" class="btn btn-sm btn-outline" title="Toggle audio alert on red words">🔔 Alert Sound: ON</button>
+              <select id="crop-zone-select" class="lang-dropdown btn-sm">
+                <option value="full">Scan Zone: Full Screen</option>
+                <option value="lower-third" selected>Scan Zone: Lower Third (تایتڵی خوارەوە)</option>
+                <option value="ticker">Scan Zone: Ticker Bar (شریتی هەواڵ)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="stage-wrapper" id="stage-wrapper">
+            <video id="video-feed" playsinline autoplay muted></video>
+            <canvas id="overlay-canvas"></canvas>
+            <div id="crop-box-indicator" class="crop-box-lower-third"></div>
+            
+            <!-- Pro HUD (Auto-Hiding) -->
+            <div id="cam-pro-hud" class="cam-pro-hud hud-hidden">
+              <div class="hud-header">
+                <span>PRO OPTICS &amp; ENHANCER</span>
+                <span class="hud-close">&times;</span>
+              </div>
+              <div class="hud-controls">
+                <div class="hud-row">
+                  <label>Contrast</label>
+                  <input type="range" id="filter-contrast" min="100" max="250" value="130" />
+                </div>
+                <div class="hud-row">
+                  <label>Brightness</label>
+                  <input type="range" id="filter-brightness" min="80" max="180" value="100" />
+                </div>
+                <div class="hud-toggles">
+                  <button id="toggle-grayscale" class="btn btn-hud active">B&amp;W High Clarity</button>
+                  <button id="toggle-invert" class="btn btn-hud">Invert (Dark CG)</button>
+                  <button id="toggle-stemmer" class="btn btn-hud active">Smart Stemmer (پاشگرەکان)</button>
+                </div>
+                <div class="hud-row">
+                  <label>Scan Interval</label>
+                  <select id="auto-scan-interval" class="hud-select">
+                    <option value="2000">Fast (2s)</option>
+                    <option value="3500" selected>Balanced (3.5s)</option>
+                    <option value="5000">Economy (5s)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="hud-touch-hint" id="hud-hint">Touch screen for Pro Settings</div>
+          </div>
+
+          <div class="viewfinder-toolbar">
+            <button id="btn-start-camera" class="btn btn-primary">Start Mobile Camera</button>
+            <button id="btn-share-screen" class="btn btn-accent">Share Screen / Window</button>
+            <button id="btn-scan-frame" class="btn btn-success" disabled>Scan Current Frame</button>
+            <button id="btn-toggle-auto" class="btn btn-secondary" disabled>Auto-Scan: OFF</button>
+            <button id="btn-fullscreen" class="btn btn-icon">⛶ Fullscreen Camera</button>
+            <button id="btn-stop-stream" class="btn btn-danger" disabled>Stop Feed</button>
+            
+            <label class="btn btn-outline file-label">
+              Upload Image
+              <input type="file" id="image-file-input" accept="image/*" />
+            </label>
+          </div>
+        </div>
+
+        <div class="panel vision-side-panel">
+          <div class="panel-header">
+            <h2>Real-Time Detected Words</h2>
+            <div class="counter-chips">
+              <span class="chip chip-green">Approved: <strong id="count-approved">0</strong></span>
+              <span class="chip chip-red">Unregistered: <strong id="count-unregistered">0</strong></span>
+            </div>
+          </div>
+
+          <div class="legend-box">
+            <span class="legend-item"><span class="swatch red"></span> RED: Not in Dictionary</span>
+            <span class="legend-item"><span class="swatch green"></span> GREEN/CLEAN: Approved</span>
+          </div>
+
+          <div class="unregistered-section">
+            <h3>Unregistered Candidates (Click '+' to add instantly):</h3>
+            <div id="unregistered-word-pills" class="pills-container">
+              <p class="empty-state">No unknown words detected in current view.</p>
+            </div>
+          </div>
+
+          <div class="raw-ocr-section">
+            <label>Raw OCR Transcript:</label>
+            <div id="ocr-raw-text" class="raw-ocr-box" dir="auto">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: TEXT & SCRIPT CHECKER -->
+    <section id="tab-text" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Broadcast Lower Third &amp; Headline Text Checker</h2>
+          <span class="subtext">Checks text with full morphological affix awareness.</span>
+        </div>
+        <div class="form-group">
+          <textarea id="manual-text-input" class="text-input" rows="5" placeholder="Paste or type broadcast ticker, lower-third script, or headline here..." dir="auto"></textarea>
+        </div>
+        <div class="action-row">
+          <button id="btn-check-text" class="btn btn-primary">Check Against Dictionary</button>
+          <button id="btn-clear-text" class="btn btn-secondary">Clear</button>
+          <button id="btn-copy-clean-text" class="btn btn-outline">Copy Text</button>
+        </div>
+
+        <hr class="separator" />
+
+        <div class="text-results-wrapper">
+          <h3>Verification Analysis:</h3>
+          <div id="text-annotated-result" class="annotated-result-box" dir="auto">
+            <span class="placeholder-text">Click "Check Against Dictionary" to inspect words.</span>
+          </div>
+          
+          <div class="unregistered-group">
+            <h4>Words Requiring Decision:</h4>
+            <div id="text-unregistered-pills" class="pills-container"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: DICTIONARY MANAGER -->
+    <section id="tab-dictionary" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>TV Mide Multi-Language Dictionary Hub</h2>
+            <p class="subtext">Manage approved core terms and official names.</p>
+          </div>
+          <div class="stat-badge">
+            <span id="active-dict-label">Sorani</span> Words: <strong id="dict-total-count">0</strong>
+          </div>
+        </div>
+
+        <div class="dict-actions-grid">
+          <div class="dict-card">
+            <h3>Add Approved Word</h3>
+            <form id="form-add-word" class="inline-form" onsubmit="return false;">
+              <input type="text" id="input-new-word" class="text-field" placeholder="Type new verified word..." dir="auto" required />
+              <button type="submit" id="btn-add-word" class="btn btn-primary">Add Word</button>
+            </form>
+            <p class="field-hint">Root words cover all grammatical suffixes automatically.</p>
+          </div>
+
+          <div class="dict-card">
+            <h3>Vocabulary Portability</h3>
+            <div class="btn-group">
+              <button id="btn-export-json" class="btn btn-secondary">Export JSON</button>
+              <label class="btn btn-outline file-label">
+                Import JSON
+                <input type="file" id="import-json-input" accept=".json" />
+              </label>
+              <button id="btn-reset-user-words" class="btn btn-danger-outline">Reset User Entries</button>
+            </div>
+            <p class="field-hint">Transfer dictionaries safely between studio computers.</p>
+          </div>
+        </div>
+
+        <div class="dict-table-container">
+          <div class="table-search-bar">
+            <input type="search" id="dict-search-input" class="text-field" placeholder="Search current dictionary vocabulary..." dir="auto" />
+          </div>
+          <div class="table-scroll">
+            <table class="dict-table">
+              <thead>
+                <tr>
+                  <th>Word</th>
+                  <th>Origin</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="dict-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: AUDIT LOGS -->
+    <section id="tab-history" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Scan &amp; Audit Trail</h2>
+          <button id="btn-clear-history" class="btn btn-danger btn-sm">Clear History Log</button>
+        </div>
+        <div class="table-scroll">
+          <table class="dict-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Channel Lang</th>
+                <th>Mode</th>
+                <th>Total Words</th>
+                <th>Approved</th>
+                <th>Unregistered</th>
+                <th>Snapshot Preview</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>TV MIDE CG DESK PRO &bull; Smart Kurdish Affix Engine &bull; Zero Paid APIs</span>
+  </footer>
+
+  <script src="2/js/dictionaries/sorani.js"></script>
+  <script src="2/js/dictionaries/kurmanji.js"></script>
+  <script src="2/js/dictionaries/arabic.js"></script>
+  <script src="2/js/dictionaries/english.js"></script>
+  <script src="2/js/dictionaries/turkish.js"></script>
+  <script src="2/js/dictionaries/persian.js"></script>
+  <script src="2/js/app.js"></script>
+</body>
+</html>
