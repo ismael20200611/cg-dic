@@ -1,0 +1,66 @@
+
+/* iPhone Full Screen Support */
+
+.iphone-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.iphone-help {
+    width: 100%;
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    z-index: 99999 !important;
+    background: #000 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen #overlay-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen
+.camera-osd-menu.osd-hidden {
+    display: none !important;
+}
+
+.camera-osd-menu.osd-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+
+    .camera-controls button,
+    .iphone-controls button {
+        min-height: 44px;
+    }
+
+    .camera-viewport-wrapper {
+        min-height: 250px;
+    }
+
+    .cg-header {
+        padding-top: max(10px, env(safe-area-inset-top));
+    }
+
+}
