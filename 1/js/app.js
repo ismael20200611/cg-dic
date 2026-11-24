@@ -4,21 +4,29 @@
  */
 
 document.addEventListener("DOMContentLoaded", () => {
+    const RTL_LANGUAGES = new Set(["sorani", "arabic", "persian"]);
+
     // Application State
     const state = {
         currentLanguage: "sorani",
-        userWords: {}, 
+        scanZone: "lower-third", // "full" | "lower-third" | "center"
+        minConfidence: 65,      // Filters out low-confidence OCR noise
+        userWords: {},
         history: [],
         cameraStream: null,
         ocrWorker: null,
         isScanning: false,
+        scanLoopTimer: null,
         lastOcrResult: null,
+        lastSourceType: "video", // "video" | "image"
+        lastUploadedImage: null,
         currentRotation: 0,
-        scanIntervalMs: 3000 // Configurable scan speed timer (default 3 seconds)
+        scanIntervalMs: 3000
     };
 
     // DOM Elements
     const languageSelect = document.getElementById("language-select");
+    const scanZoneSelect = document.getElementById("scan-zone-select");
     const dictCountBadge = document.getElementById("dict-count-badge");
     const ocrStatusBadge = document.getElementById("ocr-status-badge");
 
@@ -28,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const overlayCanvas = document.getElementById("overlay-canvas");
     const cameraPlaceholder = document.getElementById("camera-placeholder");
     const cameraOsdMenu = document.getElementById("camera-osd-menu");
-    
+
     const btnStartCamera = document.getElementById("btn-start-camera");
     const btnStartScreenShare = document.getElementById("btn-start-screen-share");
     const btnStopCamera = document.getElementById("btn-stop-camera");
@@ -42,16 +50,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnOsdStop = document.getElementById("btn-osd-stop");
     const btnRotateScreen = document.getElementById("btn-rotate-screen");
     const btnToggleFullscreen = document.getElementById("btn-toggle-fullscreen");
-    
+
     const rangeScanSpeed = document.getElementById("range-scan-speed");
     const scanIntervalVal = document.getElementById("scan-interval-val");
+    const rangeConfidence = document.getElementById("range-confidence");
+    const confVal = document.getElementById("conf-val");
     const rangeIso = document.getElementById("range-iso");
     const isoVal = document.getElementById("iso-val");
     const rangeBrightness = document.getElementById("range-brightness");
     const expVal = document.getElementById("exp-val");
     const selectFocus = document.getElementById("select-focus");
 
-    // Text Checker Elements
+    // Rich Text Formatting & Checker Elements
+    const fontFamilySelect = document.getElementById("font-family-select");
+    const textColorPicker = document.getElementById("text-color-picker");
+    const btnClearFormat = document.getElementById("btn-clear-format");
     const textCheckerInput = document.getElementById("text-checker-input");
     const btnCheckText = document.getElementById("btn-check-text");
     const btnClearText = document.getElementById("btn-clear-text");
@@ -73,8 +86,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnClearHistory = document.getElementById("btn-clear-history");
 
     const tesseractLangMap = {
-        sorani: "ara", 
-        kurmanji: "eng", 
+        sorani: "ara+fas",
+        kurmanji: "tur+eng",
         arabic: "ara",
         english: "eng",
         turkish: "tur",
@@ -85,6 +98,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function init() {
         loadLocalStorage();
+        applyTextDirection();
+        setupFormattingToolbar();
         updateDictionaryUI();
         setupEventListeners();
         initTesseractWorker();
@@ -114,10 +129,105 @@ document.addEventListener("DOMContentLoaded", () => {
         localStorage.setItem("tvmide_scan_history_v2", JSON.stringify(state.history));
     }
 
+    function applyTextDirection() {
+        const isRtl = RTL_LANGUAGES.has(state.currentLanguage);
+        const dir = isRtl ? "rtl" : "ltr";
+        document.documentElement.dir = dir;
+        document.documentElement.lang = state.currentLanguage;
+        if (textCheckerInput) textCheckerInput.dir = dir;
+        if (textCheckerResults) textCheckerResults.dir = dir;
+    }
+
+    // --- Font Family, Bold, Italic, Underline & Text Color ---
+    function setupFormattingToolbar() {
+        if (fontFamilySelect) {
+            fontFamilySelect.addEventListener("change", () => {
+                const selectedFont = fontFamilySelect.value;
+                document.documentElement.style.setProperty("--active-font", selectedFont);
+                if (textCheckerInput) textCheckerInput.style.fontFamily = selectedFont;
+                if (textCheckerResults) textCheckerResults.style.fontFamily = selectedFont;
+
+                const sel = window.getSelection();
+                if (sel && !sel.isCollapsed && textCheckerInput && textCheckerInput.contains(sel.anchorNode)) {
+                    document.execCommand("fontName", false, selectedFont);
+                }
+                if (textCheckerInput) textCheckerInput.focus();
+            });
+        }
+
+        document.querySelectorAll(".fmt-btn[data-cmd]").forEach(btn => {
+            btn.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                const cmd = btn.getAttribute("data-cmd");
+                document.execCommand(cmd, false, null);
+                updateFormattingButtonStates();
+            });
+        });
+
+        if (textColorPicker) {
+            textColorPicker.addEventListener("input", () => {
+                document.execCommand("styleWithCSS", false, true);
+                document.execCommand("foreColor", false, textColorPicker.value);
+                if (textCheckerInput) textCheckerInput.focus();
+            });
+        }
+
+        if (btnClearFormat) {
+            btnClearFormat.addEventListener("click", () => {
+                document.execCommand("removeFormat", false, null);
+                if (textCheckerInput) {
+                    textCheckerInput.style.fontFamily = fontFamilySelect ? fontFamilySelect.value : "";
+                    textCheckerInput.focus();
+                }
+                updateFormattingButtonStates();
+            });
+        }
+
+        if (textCheckerInput) {
+            textCheckerInput.addEventListener("keyup", updateFormattingButtonStates);
+            textCheckerInput.addEventListener("mouseup", updateFormattingButtonStates);
+        }
+    }
+
+    function updateFormattingButtonStates() {
+        document.querySelectorAll(".fmt-btn[data-cmd]").forEach(btn => {
+            const cmd = btn.getAttribute("data-cmd");
+            try {
+                btn.classList.toggle("active", document.queryCommandState(cmd));
+            } catch (_) {
+                // Ignore unsupported command query
+            }
+        });
+    }
+
+    function normalizeToken(word) {
+        if (!word) return "";
+        return word
+            .trim()
+            .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
+            .replace(/[\u064B-\u065F\u0670]/g, "")
+            .replace(/ي/g, "ی")
+            .replace(/ك/g, "ک")
+            .toLowerCase();
+    }
+
+    // Filters out background noise, stray symbols, and low-confidence OCR garbage
+    function isNoiseOrUnwantedToken(rawText, confidence = 100) {
+        if (typeof confidence === "number" && confidence < state.minConfidence) {
+            return true;
+        }
+        const cleaned = normalizeToken(rawText);
+        if (!cleaned || cleaned.length < 2) return true;
+        const letters = cleaned.match(/\p{L}/gu) || [];
+        if (letters.length < 2) return true;
+        if (/[^\p{L}\p{N}\u200c\-']/u.test(cleaned)) return true;
+        return false;
+    }
+
     function getActiveDictionary(lang = state.currentLanguage) {
         const baseDict = (window.TVMIDE_DICTIONARIES && window.TVMIDE_DICTIONARIES[lang]) || [];
         const userList = (state.userWords && state.userWords[lang]) || [];
-        const combined = [...baseDict, ...userList].map(w => w.trim().toLowerCase());
+        const combined = [...baseDict, ...userList].map(w => normalizeToken(w)).filter(Boolean);
         return new Set(combined);
     }
 
@@ -126,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dictSet = getActiveDictionary(lang);
         dictCountBadge.textContent = `Dictionary Words: ${dictSet.size}`;
 
-        const searchTerm = (dictSearchInput.value || "").toLowerCase().trim();
+        const searchTerm = normalizeToken(dictSearchInput.value || "");
         dictionaryWordList.innerHTML = "";
 
         const sortedWords = Array.from(dictSet).sort();
@@ -138,8 +248,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const li = document.createElement("li");
             li.innerHTML = `
-                <span>${word}</span>
-                <button data-word="${word}" class="btn-delete-word" title="Remove word">✕</button>
+                <span>${escapeHtml(word)}</span>
+                <button data-word="${escapeHtml(word)}" class="btn-delete-word" title="Remove word">✕</button>
             `;
             dictionaryWordList.appendChild(li);
         });
@@ -157,7 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function addWordToDictionary(word) {
-        const cleanWord = word.trim().toLowerCase();
+        const cleanWord = normalizeToken(word);
         if (!cleanWord) return;
 
         const lang = state.currentLanguage;
@@ -180,14 +290,15 @@ document.addEventListener("DOMContentLoaded", () => {
             drawOcrOverlay(state.lastOcrResult);
         }
 
-        if (textCheckerInput.value.trim()) {
+        if (textCheckerInput && textCheckerInput.innerText.trim()) {
             runTextCheck();
         }
     }
 
     function removeWordFromDictionary(word) {
         const lang = state.currentLanguage;
-        const baseDict = ((window.TVMIDE_DICTIONARIES && window.TVMIDE_DICTIONARIES[lang]) || []).map(w => w.toLowerCase());
+        const baseDict = ((window.TVMIDE_DICTIONARIES && window.TVMIDE_DICTIONARIES[lang]) || [])
+            .map(w => normalizeToken(w));
 
         if (baseDict.includes(word)) {
             alert("This word is part of the core base dictionary file and cannot be removed directly. You can only remove user-added custom words.");
@@ -195,7 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (state.userWords[lang]) {
-            state.userWords[lang] = state.userWords[lang].filter(w => w.toLowerCase() !== word);
+            state.userWords[lang] = state.userWords[lang].filter(w => normalizeToken(w) !== word);
             saveUserWords();
             updateDictionaryUI();
 
@@ -206,53 +317,58 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function runTextCheck() {
-        const text = textCheckerInput.value.trim();
+        const text = (textCheckerInput ? textCheckerInput.innerText : "").trim();
         if (!text) {
             textCheckerResults.innerHTML = `<p class="placeholder-text">Please enter or paste text to check.</p>`;
             return;
         }
 
         const dictSet = getActiveDictionary(state.currentLanguage);
-        const rawWords = text.split(/\s+/);
-        
+        const tokens = text.split(/(\s+)/);
+
         let recognizedCount = 0;
         let unregisteredCount = 0;
         let htmlOutput = "";
 
-        rawWords.forEach(token => {
-            const cleanToken = token.replace(/^[^\w\u0600-\u06FF]+|[^\w\u0600-\u06FF]+$/g, "");
-            
-            if (!cleanToken) {
-                htmlOutput += `<span>${token} </span>`;
+        tokens.forEach(token => {
+            if (/^\s+$/.test(token)) {
+                htmlOutput += token.replace(/\n/g, "<br>");
                 return;
             }
 
-            const isFound = dictSet.has(cleanToken.toLowerCase());
+            const cleanToken = normalizeToken(token);
+            if (!cleanToken) {
+                htmlOutput += `<span>${escapeHtml(token)}</span>`;
+                return;
+            }
+
+            const isFound = dictSet.has(cleanToken);
             if (isFound) {
                 recognizedCount++;
-                htmlOutput += `<span class="word-pill registered" title="Registered in dictionary">${token}</span> `;
+                htmlOutput += `<span class="word-pill registered" title="Registered in dictionary">${escapeHtml(token)}</span>`;
             } else {
                 unregisteredCount++;
-                htmlOutput += `<span class="word-pill unregistered" title="Not found in dictionary (Click to add)" style="cursor:pointer;" onclick="window.tvmideAddWordPrompt('${cleanToken}')">${token}</span> `;
+                htmlOutput += `<span class="word-pill unregistered" title="Not found in dictionary (Click to add)" data-add-word="${escapeHtml(cleanToken)}">${escapeHtml(token)}</span>`;
             }
         });
 
         textCheckerResults.innerHTML = htmlOutput;
+        textCheckerResults.querySelectorAll(".word-pill.unregistered").forEach(pill => {
+            pill.addEventListener("click", () => {
+                const targetWord = pill.getAttribute("data-add-word");
+                if (targetWord && confirm(`Add "${targetWord}" to the ${state.currentLanguage} dictionary?`)) {
+                    addWordToDictionary(targetWord);
+                }
+            });
+        });
 
         addHistoryRecord({
             type: "Text Check",
             language: state.currentLanguage,
-            summary: `Total: ${rawWords.length}, Recognized: ${recognizedCount}, Unregistered: ${unregisteredCount}`,
+            summary: `Recognized: ${recognizedCount}, Unregistered: ${unregisteredCount}`,
             source: text
         });
     }
-
-    window.tvmideAddWordPrompt = function(word) {
-        if (confirm(`Do you want to add "${word}" to the ${state.currentLanguage} dictionary?`)) {
-            addWordToDictionary(word);
-            runTextCheck();
-        }
-    };
 
     async function initTesseractWorker() {
         try {
@@ -261,6 +377,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const langCode = tesseractLangMap[state.currentLanguage] || "eng";
             state.ocrWorker = await Tesseract.createWorker(langCode);
+            await state.ocrWorker.setParameters({
+                tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+                preserve_interword_spaces: "1"
+            });
 
             ocrStatusBadge.textContent = "OCR Ready";
             ocrStatusBadge.className = "badge ready";
@@ -275,23 +395,39 @@ document.addEventListener("DOMContentLoaded", () => {
         if (state.ocrWorker) {
             try {
                 await state.ocrWorker.terminate();
-            } catch (e) { }
+            } catch (_) {}
         }
         ocrStatusBadge.textContent = "Switching OCR...";
         ocrStatusBadge.className = "badge processing";
-        
+
         try {
             const langCode = tesseractLangMap[lang] || "eng";
             state.ocrWorker = await Tesseract.createWorker(langCode);
+            await state.ocrWorker.setParameters({
+                tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+                preserve_interword_spaces: "1"
+            });
             ocrStatusBadge.textContent = "OCR Ready";
             ocrStatusBadge.className = "badge ready";
         } catch (err) {
+            console.error("Error switching OCR language:", err);
             ocrStatusBadge.textContent = "OCR Error";
             ocrStatusBadge.className = "badge danger";
         }
     }
 
+    function getScanCropRect(width, height) {
+        if (state.scanZone === "lower-third") {
+            return { x: 0, y: Math.floor(height * 0.65), w: width, h: Math.floor(height * 0.35) };
+        }
+        if (state.scanZone === "center") {
+            return { x: Math.floor(width * 0.1), y: Math.floor(height * 0.35), w: Math.floor(width * 0.8), h: Math.floor(height * 0.3) };
+        }
+        return { x: 0, y: 0, w: width, h: height };
+    }
+
     async function startCamera() {
+        stopCamera();
         try {
             const constraints = {
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -304,13 +440,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function startScreenShare() {
+        stopCamera();
         try {
             const constraints = {
                 video: { cursor: "always" },
                 audio: false
             };
             state.cameraStream = await navigator.mediaDevices.getDisplayMedia(constraints);
-            
+
             state.cameraStream.getVideoTracks()[0].onended = () => {
                 stopCamera();
             };
@@ -328,6 +465,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function setupActiveStream() {
+        state.lastSourceType = "video";
         cameraVideo.srcObject = state.cameraStream;
         cameraVideo.style.display = "block";
         cameraPlaceholder.style.display = "none";
@@ -340,11 +478,24 @@ document.addEventListener("DOMContentLoaded", () => {
         btnRotateMain.disabled = false;
 
         state.isScanning = true;
-        scanCameraLoop();
+        scheduleNextScan();
+    }
+
+    function scheduleNextScan() {
+        if (state.scanLoopTimer) clearTimeout(state.scanLoopTimer);
+        if (!state.isScanning) return;
+        state.scanLoopTimer = setTimeout(async () => {
+            await performOcrOnVideoFrame();
+            scheduleNextScan();
+        }, state.scanIntervalMs);
     }
 
     function stopCamera() {
         state.isScanning = false;
+        if (state.scanLoopTimer) {
+            clearTimeout(state.scanLoopTimer);
+            state.scanLoopTimer = null;
+        }
         if (state.cameraStream) {
             state.cameraStream.getTracks().forEach(track => track.stop());
             state.cameraStream = null;
@@ -363,33 +514,35 @@ document.addEventListener("DOMContentLoaded", () => {
         btnRotateMain.disabled = true;
     }
 
-    async function scanCameraLoop() {
-        if (!state.isScanning) return;
-        await performOcrOnVideoFrame();
-        if (state.isScanning) {
-            setTimeout(scanCameraLoop, state.scanIntervalMs);
-        }
-    }
-
     async function performOcrOnVideoFrame() {
         if (!state.ocrWorker || cameraVideo.paused || cameraVideo.ended) return;
-        
-        try {
-            const canvas = document.createElement("canvas");
-            canvas.width = cameraVideo.videoWidth || 640;
-            canvas.height = cameraVideo.videoHeight || 480;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+        const vw = cameraVideo.videoWidth;
+        const vh = cameraVideo.videoHeight;
+        if (!vw || !vh) return;
 
-            const result = await state.ocrWorker.recognize(canvas);
-            state.lastOcrResult = result;
-            drawOcrOverlay(result);
+        try {
+            const crop = getScanCropRect(vw, vh);
+            const cropCanvas = document.createElement("canvas");
+            cropCanvas.width = crop.w;
+            cropCanvas.height = crop.h;
+            const cctx = cropCanvas.getContext("2d");
+            cctx.filter = "grayscale(100%) contrast(145%)";
+            cctx.drawImage(cameraVideo, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+
+            const result = await state.ocrWorker.recognize(cropCanvas);
+            state.lastSourceType = "video";
+            state.lastOcrResult = {
+                width: vw,
+                height: vh,
+                crop,
+                words: (result.data && result.data.words) || []
+            };
+            drawOcrOverlay(state.lastOcrResult);
         } catch (err) {
             console.error("OCR Frame error:", err);
         }
     }
 
-    // --- Fixed Cross-Platform Fullscreen (Including iOS Safari & iPhone Support) ---
     function toggleFullscreen() {
         const el = cameraViewportContainer;
         const isInFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
@@ -397,18 +550,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isInFullscreen) {
             if (el.requestFullscreen) {
                 el.requestFullscreen().catch(err => console.log(err));
-            } else if (el.webkitRequestFullscreen) { 
+            } else if (el.webkitRequestFullscreen) {
                 el.webkitRequestFullscreen();
-            } else if (cameraVideo.webkitEnterFullscreen) { 
+            } else if (cameraVideo.webkitEnterFullscreen) {
                 cameraVideo.webkitEnterFullscreen();
             } else {
-                el.classList.toggle("css-fullscreen-fallback");
+                el.classList.toggle("iphone-fullscreen");
             }
         } else {
             if (document.exitFullscreen) {
                 document.exitFullscreen();
             } else if (document.webkitExitFullscreen) {
                 document.webkitExitFullscreen();
+            } else {
+                el.classList.remove("iphone-fullscreen");
             }
         }
     }
@@ -427,7 +582,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
             const supportedConstraints = {};
             for (const key in constraintSettings) {
-                if (capabilities[key] || key === 'exposureCompensation' || key === 'iso') {
+                if (capabilities[key] || key === "exposureCompensation" || key === "iso") {
                     supportedConstraints[key] = constraintSettings[key];
                 }
             }
@@ -440,9 +595,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function triggerOsdMenu() {
-        if (!state.cameraStream) return;
+        if (!state.cameraStream && state.lastSourceType !== "image") return;
         cameraOsdMenu.classList.add("visible");
-        
+
         if (osdHideTimeout) clearTimeout(osdHideTimeout);
         osdHideTimeout = setTimeout(() => {
             cameraOsdMenu.classList.remove("visible");
@@ -455,22 +610,40 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        stopCamera();
         ocrStatusBadge.textContent = "Processing Image...";
         ocrStatusBadge.className = "badge processing";
 
         try {
             const imageUrl = URL.createObjectURL(file);
             const img = new Image();
-            img.src = imageUrl;
             img.onload = async () => {
-                const ctx = overlayCanvas.getContext("2d");
-                overlayCanvas.width = img.width;
-                overlayCanvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
+                const iw = img.naturalWidth || img.width;
+                const ih = img.naturalHeight || img.height;
+                state.lastSourceType = "image";
+                state.lastUploadedImage = img;
+                cameraPlaceholder.style.display = "none";
 
-                const result = await state.ocrWorker.recognize(imageUrl);
-                state.lastOcrResult = result;
-                drawOcrOverlay(result);
+                const crop = getScanCropRect(iw, ih);
+                const cropCanvas = document.createElement("canvas");
+                cropCanvas.width = crop.w;
+                cropCanvas.height = crop.h;
+                const cctx = cropCanvas.getContext("2d");
+                cctx.filter = "grayscale(100%) contrast(145%)";
+                cctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+
+                const result = await state.ocrWorker.recognize(cropCanvas);
+                const validWords = ((result.data && result.data.words) || []).filter(
+                    w => !isNoiseOrUnwantedToken(w.text, w.confidence)
+                );
+
+                state.lastOcrResult = {
+                    width: iw,
+                    height: ih,
+                    crop,
+                    words: validWords
+                };
+                drawOcrOverlay(state.lastOcrResult);
 
                 ocrStatusBadge.textContent = "OCR Ready";
                 ocrStatusBadge.className = "badge ready";
@@ -478,10 +651,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 addHistoryRecord({
                     type: "Image Upload Scan",
                     language: state.currentLanguage,
-                    summary: `Recognized ${result.data.words.length} words from uploaded image.`,
+                    summary: `Found ${validWords.length} valid words in active zone.`,
                     source: file.name
                 });
+                URL.revokeObjectURL(imageUrl);
             };
+            img.src = imageUrl;
         } catch (err) {
             console.error("Image OCR error:", err);
             ocrStatusBadge.textContent = "OCR Error";
@@ -489,41 +664,55 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    function drawOcrOverlay(ocrResult) {
-        if (!ocrResult || !ocrResult.data || !ocrResult.data.words) return;
+    function drawOcrOverlay(ocrData) {
+        if (!ocrData || !Array.isArray(ocrData.words)) return;
 
         const ctx = overlayCanvas.getContext("2d");
-        const videoWidth = cameraVideo.videoWidth || overlayCanvas.clientWidth || 640;
-        const videoHeight = cameraVideo.videoHeight || overlayCanvas.clientHeight || 480;
+        const frameW = ocrData.width || cameraVideo.videoWidth || overlayCanvas.clientWidth || 640;
+        const frameH = ocrData.height || cameraVideo.videoHeight || overlayCanvas.clientHeight || 480;
 
-        overlayCanvas.width = videoWidth;
-        overlayCanvas.height = videoHeight;
-        ctx.clearRect(0, 0, videoWidth, videoHeight);
+        overlayCanvas.width = frameW;
+        overlayCanvas.height = frameH;
+        ctx.clearRect(0, 0, frameW, frameH);
+
+        if (state.lastSourceType === "image" && state.lastUploadedImage) {
+            ctx.drawImage(state.lastUploadedImage, 0, 0, frameW, frameH);
+        }
+
+        const crop = ocrData.crop || { x: 0, y: 0 };
+        if (state.scanZone !== "full") {
+            ctx.save();
+            ctx.strokeStyle = "#00d4ff";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.strokeRect(crop.x, crop.y, ocrData.crop.w, ocrData.crop.h);
+            ctx.restore();
+        }
 
         const dictSet = getActiveDictionary(state.currentLanguage);
-        let recognizedCount = 0;
-        let unregisteredCount = 0;
+        const filteredWords = ocrData.words.filter(w => !isNoiseOrUnwantedToken(w.text, w.confidence));
 
-        ocrResult.data.words.forEach(w => {
+        filteredWords.forEach(w => {
             const wordText = w.text.trim();
-            const cleanWord = wordText.replace(/^[^\w\u0600-\u06FF]+|[^\w\u0600-\u06FF]+$/g, "");
-            if (!cleanWord) return;
-
-            const isFound = dictSet.has(cleanWord.toLowerCase());
-            if (isFound) recognizedCount++;
-            else unregisteredCount++;
+            const cleanWord = normalizeToken(wordText);
+            const isFound = dictSet.has(cleanWord);
 
             const bbox = w.bbox;
-            ctx.strokeStyle = isFound ? "rgba(34, 197, 94, 0.8)" : "rgba(239, 68, 68, 0.9)";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bbox.x0, bbox.y0, bbox.x1 - bbox.x0, bbox.y1 - bbox.y0);
+            const bx = crop.x + bbox.x0;
+            const by = crop.y + bbox.y0;
+            const bw = bbox.x1 - bbox.x0;
+            const bh = bbox.y1 - bbox.y0;
 
-            ctx.fillStyle = isFound ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.3)";
-            ctx.fillRect(bbox.x0, bbox.y0 - 18, bbox.x1 - bbox.x0, 18);
+            ctx.strokeStyle = isFound ? "rgba(34, 197, 94, 0.9)" : "rgba(239, 68, 68, 0.95)";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx, by, bw, bh);
+
+            ctx.fillStyle = isFound ? "rgba(34, 197, 94, 0.25)" : "rgba(239, 68, 68, 0.35)";
+            ctx.fillRect(bx, Math.max(0, by - 18), bw, 18);
 
             ctx.fillStyle = "#ffffff";
             ctx.font = "12px sans-serif";
-            ctx.fillText(wordText, bbox.x0 + 2, bbox.y0 - 5);
+            ctx.fillText(wordText, bx + 2, Math.max(12, by - 5));
         });
     }
 
@@ -549,26 +738,74 @@ document.addEventListener("DOMContentLoaded", () => {
             const div = document.createElement("div");
             div.className = "history-item";
             div.innerHTML = `
-                <strong>[${item.type}] - Lang: ${item.language.toUpperCase()}</strong>
-                <span>${item.summary}</span>
+                <strong>[${escapeHtml(item.type)}] - Lang: ${escapeHtml(item.language.toUpperCase())}</strong>
+                <span>${escapeHtml(item.summary)}</span>
                 <div class="history-meta">
-                    <span>Source: ${item.source ? item.source.substring(0, 30) : 'Live Stream'}</span>
-                    <span>${item.timestamp}</span>
+                    <span>Source: ${escapeHtml((item.source || "Live Stream").substring(0, 30))}</span>
+                    <span>${escapeHtml(item.timestamp)}</span>
                 </div>
             `;
             historyList.appendChild(div);
         });
     }
 
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, m => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        }[m]));
+    }
+
     function setupEventListeners() {
         languageSelect.addEventListener("change", (e) => {
             state.currentLanguage = e.target.value;
+            applyTextDirection();
             updateDictionaryUI();
             changeOcrLanguage(state.currentLanguage);
             state.lastOcrResult = null;
             const ctx = overlayCanvas.getContext("2d");
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         });
+
+        if (scanZoneSelect) {
+            scanZoneSelect.addEventListener("change", (e) => {
+                state.scanZone = e.target.value;
+                if (state.lastSourceType === "video" && state.cameraStream) {
+                    performOcrOnVideoFrame();
+                } else if (state.lastSourceType === "image" && state.lastUploadedImage) {
+                    const img = state.lastUploadedImage;
+                    const iw = img.naturalWidth || img.width;
+                    const ih = img.naturalHeight || img.height;
+                    const crop = getScanCropRect(iw, ih);
+                    const cropCanvas = document.createElement("canvas");
+                    cropCanvas.width = crop.w;
+                    cropCanvas.height = crop.h;
+                    const cctx = cropCanvas.getContext("2d");
+                    cctx.filter = "grayscale(100%) contrast(145%)";
+                    cctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+                    state.ocrWorker.recognize(cropCanvas).then(res => {
+                        state.lastOcrResult = {
+                            width: iw,
+                            height: ih,
+                            crop,
+                            words: ((res.data && res.data.words) || []).filter(w => !isNoiseOrUnwantedToken(w.text, w.confidence))
+                        };
+                        drawOcrOverlay(state.lastOcrResult);
+                    });
+                }
+            });
+        }
+
+        if (rangeConfidence) {
+            rangeConfidence.addEventListener("input", (e) => {
+                state.minConfidence = Number(e.target.value);
+                if (confVal) confVal.textContent = `${state.minConfidence}%`;
+                if (state.lastOcrResult) drawOcrOverlay(state.lastOcrResult);
+            });
+        }
 
         btnAddWord.addEventListener("click", () => {
             addWordToDictionary(newWordInput.value);
@@ -610,11 +847,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (Array.isArray(importedWords)) {
                         if (!state.userWords[state.currentLanguage]) state.userWords[state.currentLanguage] = [];
                         const currentSet = new Set(state.userWords[state.currentLanguage]);
-                        importedWords.forEach(w => currentSet.add(w.toLowerCase()));
+                        importedWords.forEach(w => {
+                            const norm = normalizeToken(w);
+                            if (norm) currentSet.add(norm);
+                        });
                         state.userWords[state.currentLanguage] = Array.from(currentSet);
                         saveUserWords();
                         updateDictionaryUI();
-                        alert(`Successfully imported ${importedWords.length} words into ${state.currentLanguage} dictionary.`);
+                        alert(`Successfully imported words into ${state.currentLanguage} dictionary.`);
                     } else {
                         alert("Invalid dictionary JSON format. Expected an array of words.");
                     }
@@ -627,7 +867,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         btnCheckText.addEventListener("click", runTextCheck);
         btnClearText.addEventListener("click", () => {
-            textCheckerInput.value = "";
+            if (textCheckerInput) textCheckerInput.innerHTML = "";
             textCheckerResults.innerHTML = `<p class="placeholder-text">Checked words will appear here with membership status...</p>`;
         });
         btnCopyText.addEventListener("click", () => {
@@ -644,24 +884,22 @@ document.addEventListener("DOMContentLoaded", () => {
         btnFullscreenMain.addEventListener("click", toggleFullscreen);
         btnRotateMain.addEventListener("click", rotateCameraView);
 
-        // OSD menu button bindings
         btnOsdScan.addEventListener("click", performOcrOnVideoFrame);
         btnOsdStop.addEventListener("click", stopCamera);
         btnRotateScreen.addEventListener("click", rotateCameraView);
         btnToggleFullscreen.addEventListener("click", toggleFullscreen);
 
-        // Scan Speed Timer Slider
         rangeScanSpeed.addEventListener("input", (e) => {
-            const seconds = e.target.value;
+            const seconds = Number(e.target.value);
             state.scanIntervalMs = seconds * 1000;
             scanIntervalVal.textContent = seconds + "s";
+            if (state.isScanning) scheduleNextScan();
         });
 
-        // Hardware Controls Sliders
         rangeIso.addEventListener("input", (e) => {
             const val = e.target.value;
             isoVal.textContent = val;
-            applyCameraConstraints({ iso: parseInt(val) });
+            applyCameraConstraints({ iso: parseInt(val, 10) });
         });
 
         rangeBrightness.addEventListener("input", (e) => {
@@ -675,7 +913,6 @@ document.addEventListener("DOMContentLoaded", () => {
             applyCameraConstraints({ focusMode: val });
         });
 
-        // Touch/Click viewport to trigger auto-hiding OSD menu
         cameraViewportContainer.addEventListener("click", triggerOsdMenu);
         cameraViewportContainer.addEventListener("touchstart", triggerOsdMenu, { passive: true });
 
