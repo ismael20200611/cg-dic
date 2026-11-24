@@ -1,4 +1,3 @@
-
 :root {
     --bg-dark: #0b0f19;
     --panel-bg: #131b2e;
@@ -10,22 +9,42 @@
     --text-muted: #94a3b8;
     --danger-red: #ef4444;
     --success-green: #22c55e;
+    --accent-cyan: #00d4ff;
     --radius: 8px;
+    --active-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@font-face {
+    font-family: 'Rudaw';
+    src: local('Rudaw'), local('RudawRegular'), local('Rudaw-Regular');
+    font-display: swap;
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
     background-color: var(--bg-dark);
     color: var(--text-main);
+    font-family: var(--active-font);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+/* Keep UI chrome on clean UI font while CG editor/results follow --active-font */
+.cg-header,
+.control-panel,
+.dictionary-manager-panel,
+.history-panel,
+.btn,
+.btn-osd,
+select,
+input {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .cg-header {
@@ -104,6 +123,7 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .control-group label {
@@ -121,7 +141,7 @@ select, input[type="text"] {
     outline: none;
 }
 
-select:focus, input[type="text"]:focus, textarea:focus {
+select:focus, input[type="text"]:focus, .rich-editor:focus {
     border-color: var(--primary-blue);
 }
 
@@ -140,7 +160,7 @@ select:focus, input[type="text"]:focus, textarea:focus {
 }
 
 .badge.idle { background-color: var(--panel-border); color: var(--text-muted); }
-.badge.processing { background-color: var(--accent-gold); color: #000; }
+.badge.processing, .badge.scanning { background-color: var(--accent-gold); color: #000; }
 .badge.ready { background-color: var(--success-green); color: #000; }
 
 .workspace-grid {
@@ -248,7 +268,7 @@ h2 {
     pointer-events: none;
     transition: opacity 0.3s ease;
     z-index: 1000000;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
     width: 90%;
     max-width: 450px;
 }
@@ -256,6 +276,11 @@ h2 {
 .camera-osd-menu.visible {
     opacity: 1;
     pointer-events: auto;
+}
+
+.camera-osd-menu.osd-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 .osd-title {
@@ -270,6 +295,7 @@ h2 {
     display: flex;
     gap: 8px;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .osd-sliders-row {
@@ -277,7 +303,7 @@ h2 {
     gap: 8px;
     align-items: center;
     justify-content: space-between;
-    border-top: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding-top: 8px;
     flex-wrap: wrap;
 }
@@ -338,6 +364,7 @@ h2 {
     margin-top: 10px;
     font-size: 0.85rem;
     color: var(--text-muted);
+    flex-wrap: wrap;
 }
 
 .legend-item {
@@ -350,9 +377,11 @@ h2 {
     width: 12px;
     height: 12px;
     border-radius: 2px;
+    display: inline-block;
 }
 .box-sample.green { background-color: var(--success-green); }
 .box-sample.red { background-color: var(--danger-red); }
+.box-sample.cyan { border: 2px dashed var(--accent-cyan); }
 
 /* Buttons */
 .btn {
@@ -390,18 +419,100 @@ h2 {
     justify-content: center;
 }
 
-/* Text Checker Section */
-textarea {
+/* Rich Text Formatting Toolbar & Editor */
+.format-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background-color: var(--bg-dark);
+    border: 1px solid var(--panel-border);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 8px 10px;
+}
+
+.fmt-btn {
+    min-width: 34px;
+    height: 32px;
+    padding: 0 8px;
+    background-color: var(--panel-bg);
+    color: var(--text-main);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.fmt-btn.active {
+    background-color: var(--primary-blue);
+    border-color: var(--primary-blue);
+    color: #fff;
+}
+
+.color-picker-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.color-picker-label input[type="color"] {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.rich-editor {
     width: 100%;
-    height: 110px;
+    min-height: 110px;
     background-color: var(--bg-dark);
     border: 1px solid var(--panel-border);
     color: var(--text-main);
     padding: 0.75rem;
-    border-radius: var(--radius);
-    resize: vertical;
-    font-size: 0.95rem;
+    border-radius: 0 0 var(--radius) var(--radius);
+    font-family: var(--active-font);
+    font-size: 1.05rem;
+    line-height: 1.6;
     margin-bottom: 10px;
+    outline: none;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Ensure Bold, Italic, Underline, and Inline Color always render visibly */
+.rich-editor b,
+.rich-editor strong,
+.results-box b,
+.results-box strong {
+    font-weight: 700;
+}
+
+.rich-editor i,
+.rich-editor em,
+.results-box i,
+.results-box em {
+    font-style: italic;
+}
+
+.rich-editor u,
+.results-box u {
+    text-decoration: underline;
+}
+
+.rich-editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    font-style: italic;
+    pointer-events: none;
 }
 
 .button-row {
@@ -416,10 +527,11 @@ textarea {
     border-radius: var(--radius);
     padding: 10px;
     min-height: 90px;
-    max-height: 160px;
+    max-height: 180px;
     overflow-y: auto;
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-family: var(--active-font);
+    font-size: 1.05rem;
+    line-height: 1.8;
 }
 
 .placeholder-text {
@@ -427,7 +539,8 @@ textarea {
     font-style: italic;
 }
 
-.word-pill {
+.word-pill,
+.word-chip {
     display: inline-block;
     padding: 2px 6px;
     margin: 3px;
@@ -435,16 +548,19 @@ textarea {
     font-weight: 500;
 }
 
-.word-pill.registered {
+.word-pill.registered,
+.word-chip.approved {
     background-color: rgba(34, 197, 94, 0.15);
     color: var(--success-green);
     border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
-.word-pill.unregistered {
+.word-pill.unregistered,
+.word-chip.unregistered {
     background-color: rgba(239, 68, 68, 0.2);
     color: var(--danger-red);
     border: 1px solid rgba(239, 68, 68, 0.4);
+    cursor: pointer;
 }
 
 /* Dictionary Manager Section */
@@ -484,7 +600,8 @@ textarea {
     align-items: center;
     padding: 6px 10px;
     border-bottom: 1px solid var(--panel-border);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-family: var(--active-font);
 }
 
 #dictionary-word-list li:hover {
@@ -524,4 +641,63 @@ textarea {
     font-size: 0.75rem;
     display: flex;
     justify-content: space-between;
+}
+
+/* iPhone Full Screen Support */
+.iphone-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.iphone-help {
+    width: 100%;
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    z-index: 99999 !important;
+    background: #000 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen #overlay-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.camera-viewport-wrapper.iphone-fullscreen .camera-osd-menu.osd-hidden,
+.camera-osd-menu.osd-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+@media (max-width: 768px) {
+    .camera-controls button,
+    .iphone-controls button {
+        min-height: 44px;
+    }
+
+    .camera-viewport-wrapper {
+        min-height: 250px;
+    }
+
+    .cg-header {
+        padding-top: max(10px, env(safe-area-inset-top));
+    }
 }
