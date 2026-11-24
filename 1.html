@@ -2,14 +2,12 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TV MIDE CG DESK - Multilingual Dictionary OCR & Text Checker</title>
     <link rel="stylesheet" href="1/css/style.css">
-    <!-- Tesseract.js CDN for browser OCR -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
 </head>
 <body>
-    <!-- Top Broadcast Header -->
     <header class="cg-header">
         <div class="brand">
             <span class="live-dot"></span>
@@ -23,7 +21,7 @@
     </header>
 
     <main class="cg-container">
-        <!-- Control Bar: Language & Mode Selection -->
+        <!-- Control Bar -->
         <section class="panel control-panel">
             <div class="control-group">
                 <label for="language-select">Active Language:</label>
@@ -35,7 +33,15 @@
                     <option value="turkish">Turkish (Türkçe)</option>
                     <option value="persian">Persian (فارسی)</option>
                 </select>
+
+                <label for="scan-zone-select">Scan Focus:</label>
+                <select id="scan-zone-select" title="Restrict OCR to specific screen area to ignore studio noise">
+                    <option value="full">Full Frame</option>
+                    <option value="lower-third" selected>Lower Third (Bottom 35%)</option>
+                    <option value="center">Center Banner</option>
+                </select>
             </div>
+
             <div class="status-indicator">
                 <span id="dict-count-badge">Dictionary Words: 0</span>
                 <span id="ocr-status-badge" class="badge idle">OCR Ready</span>
@@ -43,35 +49,37 @@
         </section>
 
         <div class="workspace-grid">
-            <!-- Left Column: Live Camera, Screen Share, & Text Checker -->
+            <!-- Left Column -->
             <div class="column-primary">
                 <!-- Camera & Screen Share OCR Scanner -->
                 <section class="panel camera-panel">
                     <h2>Live Camera, Screen Share & Image OCR Scanner</h2>
-                    
-                    <!-- Camera Viewport Container (Handles Fullscreen & Auto-hiding Menu) -->
+
                     <div id="camera-viewport-container" class="camera-viewport-wrapper">
                         <video id="camera-video" autoplay playsinline muted></video>
                         <canvas id="overlay-canvas"></canvas>
-                        
+
                         <div id="camera-placeholder" class="camera-placeholder">
                             <p>Capture inactive. Start camera, share a screen/window, or upload an image.</p>
                         </div>
 
-                        <!-- Professional Auto-Hiding Camera OSD Menu Overlay -->
+                        <!-- Auto-Hiding OSD Menu -->
                         <div id="camera-osd-menu" class="camera-osd-menu">
-                            <div class="osd-title">PRO STREAM SETTINGS & HARDWARE FX</div>
+                            <div class="osd-title">PRO STREAM SETTINGS & OCR FILTER</div>
                             <div class="osd-controls-grid">
-                                <button id="btn-rotate-screen" class="btn-osd" title="Rotate View">Rotate 90°</button>
-                                <button id="btn-toggle-fullscreen" class="btn-osd" title="Toggle Fullscreen">Fullscreen</button>
+                                <button id="btn-rotate-screen" class="btn-osd">Rotate 90°</button>
+                                <button id="btn-toggle-fullscreen" class="btn-osd">Fullscreen</button>
                                 <button id="btn-osd-scan" class="btn-osd accent">Scan Now</button>
                                 <button id="btn-osd-stop" class="btn-osd danger">Stop</button>
                             </div>
-                            <!-- Hardware Camera Adjustments & Scan Speed -->
-                            <div class="osd-sliders-row" id="hardware-fx-row">
+                            <div class="osd-sliders-row">
                                 <div class="slider-group">
                                     <label>Scan Speed: <span id="scan-interval-val">3s</span></label>
                                     <input type="range" id="range-scan-speed" min="1" max="10" step="1" value="3">
+                                </div>
+                                <div class="slider-group">
+                                    <label>Noise Filter (Min Confidence): <span id="conf-val">65%</span></label>
+                                    <input type="range" id="range-confidence" min="30" max="95" step="5" value="65">
                                 </div>
                                 <div class="slider-group">
                                     <label>ISO: <span id="iso-val">Auto</span></label>
@@ -80,14 +88,6 @@
                                 <div class="slider-group">
                                     <label>Exposure: <span id="exp-val">0</span></label>
                                     <input type="range" id="range-brightness" min="-2" max="2" step="0.5" value="0">
-                                </div>
-                                <div class="slider-group">
-                                    <label>Focus:</label>
-                                    <select id="select-focus">
-                                        <option value="continuous">Auto</option>
-                                        <option value="macro">Macro</option>
-                                        <option value="manual">Manual</option>
-                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -104,30 +104,60 @@
                             Upload Image <input type="file" id="image-upload-input" accept="image/*" hidden>
                         </label>
                     </div>
+
                     <div class="legend">
                         <span class="legend-item"><span class="box-sample green"></span> Approved Dictionary Word</span>
-                        <span class="legend-item"><span class="box-sample red"></span> Unregistered / New Word</span>
+                        <span class="legend-item"><span class="box-sample red"></span> Unregistered / Spelling Alert</span>
+                        <span class="legend-item"><span class="box-sample cyan"></span> Active Scan Zone</span>
                     </div>
                 </section>
 
-                <!-- Text Checker Mode -->
+                <!-- Rich Text Checker Mode -->
                 <section class="panel text-checker-panel">
-                    <h2>Manual Text Checker</h2>
-                    <textarea id="text-checker-input" placeholder="Paste or type broadcast lower thirds, headlines, or captions here..."></textarea>
+                    <h2>Manual CG Text Checker & Styler</h2>
+
+                    <!-- Rich Text Formatting Toolbar -->
+                    <div class="format-toolbar" role="toolbar" aria-label="Text Formatting">
+                        <select id="font-family-select" title="Font Family">
+                            <option value="Rudaw, 'Noto Sans Arabic', 'Segoe UI', sans-serif">Rudaw / Broadcast Sans</option>
+                            <option value="'Noto Naskh Arabic', Tahoma, serif">Noto Naskh / Editorial</option>
+                            <option value="'Cairo', 'Segoe UI', sans-serif">Cairo Modern</option>
+                            <option value="Arial, Helvetica, sans-serif">Arial</option>
+                            <option value="'Courier New', monospace">Monospace CG</option>
+                        </select>
+
+                        <button type="button" id="btn-bold" class="fmt-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+                        <button type="button" id="btn-italic" class="fmt-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+                        <button type="button" id="btn-underline" class="fmt-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+
+                        <label class="color-picker-label" title="Text Color">
+                            <span>Color</span>
+                            <input type="color" id="text-color-picker" value="#ffffff">
+                        </label>
+
+                        <button type="button" id="btn-clear-format" class="fmt-btn" title="Reset Formatting">Clear Style</button>
+                    </div>
+
+                    <!-- ContentEditable Rich Editor (replaces plain textarea) -->
+                    <div id="text-checker-input"
+                         class="rich-editor"
+                         contenteditable="true"
+                         data-placeholder="Paste or type broadcast lower thirds, headlines, or captions here..."></div>
+
                     <div class="button-row">
                         <button id="btn-check-text" class="btn primary">Check Text</button>
                         <button id="btn-clear-text" class="btn secondary">Clear</button>
                         <button id="btn-copy-text" class="btn secondary">Copy Results</button>
                     </div>
+
                     <div id="text-checker-results" class="results-box">
                         <p class="placeholder-text">Checked words will appear here with membership status...</p>
                     </div>
                 </section>
             </div>
 
-            <!-- Right Column: Dictionary Manager & History -->
+            <!-- Right Column -->
             <div class="column-secondary">
-                <!-- Dictionary Manager -->
                 <section class="panel dictionary-manager-panel">
                     <h2>Dictionary Manager</h2>
                     <div class="dict-form-group">
@@ -145,13 +175,10 @@
                         <button id="btn-reset-dict" class="btn danger">Reset User Words</button>
                     </div>
                     <div class="dictionary-list-container">
-                        <ul id="dictionary-word-list">
-                            <!-- Populated dynamically -->
-                        </ul>
+                        <ul id="dictionary-word-list"></ul>
                     </div>
                 </section>
 
-                <!-- Scan History & Analytics -->
                 <section class="panel history-panel">
                     <h2>Scan & Check History</h2>
                     <div id="history-list" class="history-list">
@@ -162,7 +189,7 @@
         </div>
     </main>
 
-    <!-- App Scripts -->
+    <!-- Dictionary Scripts -->
     <script src="1/js/dictionaries/sorani.js"></script>
     <script src="1/js/dictionaries/kurmanji.js"></script>
     <script src="1/js/dictionaries/arabic.js"></script>
